@@ -1,41 +1,42 @@
 import React, { useState } from 'react';
-import { ShieldCheck, Lock, User, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import { ShieldCheck, Lock, Mail, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import { supabase } from '../config/supabase';
 
 export const LoginPage = ({ onLoginSuccess }) => {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
-    if (!username.trim() || !password.trim()) {
-      setError('يرجى إدخال اسم المستخدم وكلمة المرور');
+    if (!email.trim() || !password.trim()) {
+      setError('يرجى إدخال البريد الإلكتروني وكلمة المرور');
       return;
     }
 
     setIsLoading(true);
 
-    // التحقق من بيانات الدخول (الافتراضية: admin / admin123 أو عبر بيانات الأدمن)
-    setTimeout(() => {
-      if (
-        (username.trim().toLowerCase() === 'admin' && password === 'admin123') ||
-        (username.trim().toLowerCase() === 'shabakti' && password === 'shabakti2026')
-      ) {
-        localStorage.setItem('shabakti_admin_auth', JSON.stringify({
-          user: username.trim(),
-          role: 'super_admin',
-          loginAt: new Date().toISOString()
-        }));
+    try {
+      // تسجيل الدخول الآمن المشفر عبر Supabase Auth
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password: password
+      });
+
+      if (authError) {
+        setError('بيانات الدخول غير صحيحة، يرجى التأكد والمحاولة مجدداً');
+      } else if (data?.session) {
         onLoginSuccess();
-      } else {
-        setError('بيانات الدخول غير صحيحة، تأكد من اسم المستخدم وكلمة المرور');
       }
+    } catch (err) {
+      setError('تعذر الاتصال بخادم المصادقة: ' + err.message);
+    } finally {
       setIsLoading(false);
-    }, 600);
+    }
   };
 
   return (
@@ -62,31 +63,33 @@ export const LoginPage = ({ onLoginSuccess }) => {
           </div>
         )}
 
-        {/* نموذج تسجيل الدخول */}
+        {/* نموذج تسجيل الدخول المشفر */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold text-slate-300 mb-1.5">اسم المستخدم أو البريد:</label>
+            <label className="block text-xs font-bold text-slate-300 mb-1.5">البريد الإلكتروني للأدمن:</label>
             <div className="relative">
-              <User className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5" />
+              <Mail className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5" />
               <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="أدخل اسم المستخدم (مثل admin)"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="admin@shabakti.com"
+                required
                 className="w-full pl-4 pr-10 py-3 text-xs rounded-xl bg-slate-800/80 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-300 mb-1.5">كلمة المرور:</label>
+            <label className="block text-xs font-bold text-slate-300 mb-1.5">كلمة المرور المشفرة:</label>
             <div className="relative">
               <Lock className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5" />
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="أدخل كلمة المرور"
+                placeholder="••••••••••••"
+                required
                 className="w-full pl-10 pr-10 py-3 text-xs rounded-xl bg-slate-800/80 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
               />
               <button
@@ -104,15 +107,10 @@ export const LoginPage = ({ onLoginSuccess }) => {
             disabled={isLoading}
             className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-blue-600/25 transition-all mt-2"
           >
-            <span>{isLoading ? 'جاري التحقق...' : 'تسجيل الدخول إلى اللوحة'}</span>
+            <span>{isLoading ? 'جاري التحقق والمصادقة...' : 'تسجيل الدخول الآمن'}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>
-
-        <div className="p-3 bg-slate-800/40 border border-slate-700/50 rounded-xl text-[11px] text-slate-400 text-center space-y-1">
-          <p>الحساب الافتراضي للأدمن: <span className="text-blue-400 font-mono font-bold">admin</span></p>
-          <p>كلمة المرور الافتراضية: <span className="text-blue-400 font-mono font-bold">admin123</span></p>
-        </div>
       </div>
     </div>
   );

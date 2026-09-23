@@ -11,10 +11,8 @@ import { supabase } from './config/supabase';
 import { DigitalVaultService } from './services/digitalVaultService';
 
 export function App() {
-  // حالة التحقق وتسجيل الدخول
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return !!localStorage.getItem('shabakti_admin_auth');
-  });
+  const [session, setSession] = useState(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
 
   const [activeTab, setActiveTab] = useState('dashboard');
   const [orders, setOrders] = useState([]);
@@ -25,10 +23,27 @@ export function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
 
-  // تسجيل الخروج
-  const handleLogout = () => {
-    localStorage.removeItem('shabakti_admin_auth');
-    setIsAuthenticated(false);
+  // إدارة جلسة Supabase Auth
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setIsAuthLoading(false);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setIsAuthLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // تسجيل الخروج الآمن
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setSession(null);
   };
 
   // جلب الطلبات من Supabase
@@ -90,7 +105,7 @@ export function App() {
   };
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!session) return;
 
     handleRefreshAll();
 
@@ -116,10 +131,21 @@ export function App() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [isAuthenticated]);
+  }, [session]);
 
-  if (!isAuthenticated) {
-    return <LoginPage onLoginSuccess={() => setIsAuthenticated(true)} />;
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white" dir="rtl">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <span className="text-xs text-slate-400">جاري التحقق من الصلاحيات الأمنية...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <LoginPage onLoginSuccess={() => {}} />;
   }
 
   const pendingCount = orders.filter(
