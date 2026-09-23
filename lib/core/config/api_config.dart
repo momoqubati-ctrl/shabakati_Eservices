@@ -1,4 +1,10 @@
 class ApiConfig {
+  // Live Vercel Backend Gateway Domain
+  static const String vercelBackendUrl = String.fromEnvironment(
+    'VERCEL_BACKEND_URL',
+    defaultValue: 'https://shabakati-eservices.vercel.app',
+  );
+
   // Digital Vault Seller API v1
   static const String baseUrl = String.fromEnvironment(
     'DIGITAL_VAULT_BASE_URL',
