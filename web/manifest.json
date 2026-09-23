@@ -1,6 +1,6 @@
 {
-    "name": "shabakti_eservices",
-    "short_name": "shabakti_eservices",
+    "name": "بوابة شبكتي للخدمات الرقمية",
+    "short_name": "بوابة شبكتي",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

@@ -28,7 +28,7 @@ class CatalogPage extends StatelessWidget {
                 child: Icon(Icons.flash_on_rounded, color: colorScheme.primary, size: 20),
               ),
               const SizedBox(width: 8),
-              const Text('شَبَكتي | متجر الاشتراكات', style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text('بوابة شبكتي للخدمات الرقمية', style: TextStyle(fontWeight: FontWeight.bold)),
             ],
           ),
           actions: [

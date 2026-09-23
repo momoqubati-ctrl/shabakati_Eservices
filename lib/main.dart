@@ -69,7 +69,7 @@ class ShabaktiEservicesApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'شَبَكتي | للخدمات والاشتراكات الرقمية',
+      title: 'بوابة شبكتي للخدمات الرقمية',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
