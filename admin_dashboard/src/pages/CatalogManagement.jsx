@@ -20,12 +20,12 @@ export const PRESET_ICONS = [
   { name: 'Gemini Pro', icon: `${ICON_BASE_URL}gemini.png` },
   { name: 'ChatGPT / OpenAI', icon: `${ICON_BASE_URL}chatgpt.png` },
   { name: 'Duolingo', icon: `${ICON_BASE_URL}duolingo.png` },
-  { name: 'Canva Pro', icon: `${ICON_BASE_URL}canva.png` },
-  { name: 'Adobe Express', icon: `${ICON_BASE_URL}adobe-express.png` },
+  { name: 'Canva Pro', icon: `${ICON_BASE_URL}canva_v2.png` },
+  { name: 'Adobe Express', icon: `${ICON_BASE_URL}adobe_express_v2.png` },
   { name: 'LinkedIn Premium', icon: `${ICON_BASE_URL}linkedin.png` },
   { name: 'Coursera Plus', icon: `${ICON_BASE_URL}coursera.png` },
   { name: 'Microsoft 365', icon: `${ICON_BASE_URL}office365.png` },
-  { name: 'CapCut Pro', icon: `${ICON_BASE_URL}capcut.png` },
+  { name: 'CapCut Pro', icon: `${ICON_BASE_URL}capcut_v2.png` },
   { name: 'Netflix', icon: `${ICON_BASE_URL}netflix.png` },
   { name: 'Notion AI', icon: `${ICON_BASE_URL}notion.png` },
   { name: 'NordVPN', icon: `${ICON_BASE_URL}nordvpn.png` }
@@ -36,12 +36,12 @@ export const getDefaultIcon = (sku = '', name = '') => {
   if (lower.includes('gemini')) return `${ICON_BASE_URL}gemini.png`;
   if (lower.includes('duolingo')) return `${ICON_BASE_URL}duolingo.png`;
   if (lower.includes('chatgpt') || lower.includes('gpt') || lower.includes('openai')) return `${ICON_BASE_URL}chatgpt.png`;
-  if (lower.includes('canva')) return `${ICON_BASE_URL}canva.png`;
-  if (lower.includes('adobe')) return `${ICON_BASE_URL}adobe-express.png`;
+  if (lower.includes('canva')) return `${ICON_BASE_URL}canva_v2.png`;
+  if (lower.includes('adobe')) return `${ICON_BASE_URL}adobe_express_v2.png`;
   if (lower.includes('linkedin')) return `${ICON_BASE_URL}linkedin.png`;
   if (lower.includes('coursera')) return `${ICON_BASE_URL}coursera.png`;
   if (lower.includes('office') || lower.includes('365') || lower.includes('microsoft')) return `${ICON_BASE_URL}office365.png`;
-  if (lower.includes('capcut')) return `${ICON_BASE_URL}capcut.png`;
+  if (lower.includes('capcut')) return `${ICON_BASE_URL}capcut_v2.png`;
   if (lower.includes('netflix')) return `${ICON_BASE_URL}netflix.png`;
   if (lower.includes('notion')) return `${ICON_BASE_URL}notion.png`;
   if (lower.includes('nordvpn') || lower.includes('vpn')) return `${ICON_BASE_URL}nordvpn.png`;
@@ -147,9 +147,13 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
     const costUsd = (product.seller_price?.amount_cents || 0) / 100;
     const costYer = costUsd * exchangeRate;
     const defaultPriceYer = Math.ceil((costYer + 1000) / 1000) * 1000;
-    const priceYer = custom.customPriceYer 
-      ? Number(custom.customPriceYer) 
-      : defaultPriceYer;
+    
+    // هل أدخل المستخدم سعراً مخصصاً؟
+    const rawVal = custom.customPriceYer;
+    const hasCustomVal = rawVal !== undefined && rawVal !== null && rawVal !== '' && !isNaN(Number(rawVal)) && Number(rawVal) > 0;
+    
+    // إذا كان مخصصاً نحفظ الرقم، وإلا null لكي يبقى محتسباً آلياً في التطبيق
+    const priceYerToSave = hasCustomVal ? Number(rawVal) : null;
     const effectiveIconUrl = custom.iconUrl || getDefaultIcon(product.sku, product.name);
 
     setSavingProductId(product.id);
@@ -159,8 +163,8 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
         .upsert({
           product_id: product.id,
           sku: product.sku,
-          custom_price_yer: priceYer,
-          custom_price_usd: (priceYer / exchangeRate).toFixed(2),
+          custom_price_yer: priceYerToSave,
+          custom_price_usd: priceYerToSave ? (priceYerToSave / exchangeRate).toFixed(2) : null,
           stock_quantity: custom.stockQuantity ?? 99,
           icon_url: effectiveIconUrl,
           is_active: custom.isActive ?? true,
@@ -174,7 +178,7 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
         ...prev,
         [product.id]: {
           ...prev[product.id],
-          customPriceYer: priceYer,
+          customPriceYer: priceYerToSave !== null ? priceYerToSave : '',
           iconUrl: effectiveIconUrl,
           saved: true
         }
@@ -265,9 +269,23 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
 
           const custom = customPricing[product.id] || {};
           const defaultSellingPriceYer = Math.ceil((costYer + 1000) / 1000) * 1000;
-          const currentSellingPriceYer = custom.customPriceYer !== undefined && custom.customPriceYer !== ''
-            ? custom.customPriceYer 
+          
+          const rawPrice = custom.customPriceYer;
+          const hasCustomPrice = rawPrice !== undefined && 
+                                 rawPrice !== null && 
+                                 rawPrice !== '' && 
+                                 !isNaN(Number(rawPrice)) && 
+                                 Number(rawPrice) > 0;
+
+          // السماح للمستخدم بتعديل ومسح الحقل بحرية دون إجباره على السعر الافتراضي أثناء الكتابة
+          const displayInputValue = rawPrice !== undefined 
+            ? rawPrice 
             : defaultSellingPriceYer;
+
+          const effectivePriceForProfit = hasCustomPrice 
+            ? Number(rawPrice) 
+            : defaultSellingPriceYer;
+
           const currentIconUrl = custom.iconUrl || getDefaultIcon(product.sku, product.name);
 
           const stockQty = custom.stockQuantity ?? 99;
@@ -388,16 +406,24 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
               {/* قسم تحديد سعر البيع للجمهور بالريال اليمني */}
               <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-700">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                    <span>سعر البيع للجمهور (بالريال اليمني):</span>
-                    <span className="text-[10px] text-emerald-600 font-semibold">
-                      الربح: {(currentSellingPriceYer - costYer).toLocaleString()} ر.ي
-                    </span>
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      سعر البيع للجمهور (بالريال اليمني):
+                    </label>
+                    {hasCustomPrice ? (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800/50">
+                        سعر يدوي مخصص
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50">
+                        احتساب آلي (+1000 وتقريب)
+                      </span>
+                    )}
+                  </div>
                   <div className="relative">
                     <input
                       type="number"
-                      value={currentSellingPriceYer}
+                      value={displayInputValue}
                       onChange={(e) => {
                         const val = e.target.value;
                         setCustomPricing(prev => ({
@@ -408,9 +434,33 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
                           }
                         }));
                       }}
+                      placeholder={`آلي: ${defaultSellingPriceYer}`}
                       className="w-full pl-12 pr-4 py-2.5 text-sm font-black text-blue-600 dark:text-blue-400 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:outline-none focus:border-blue-500"
                     />
                     <span className="absolute left-3.5 top-2.5 text-xs font-bold text-slate-400">ر.ي</span>
+                  </div>
+                  <div className="flex items-center justify-between mt-1.5 text-[11px]">
+                    <span className="text-emerald-600 font-semibold">
+                      الربح: {(effectivePriceForProfit - costYer).toLocaleString()} ر.ي
+                    </span>
+                    {hasCustomPrice && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomPricing(prev => ({
+                            ...prev,
+                            [product.id]: {
+                              ...prev[product.id],
+                              customPriceYer: ''
+                            }
+                          }));
+                        }}
+                        className="text-[10px] text-blue-600 hover:text-blue-700 dark:text-blue-400 underline font-semibold flex items-center gap-1"
+                      >
+                        <RefreshCw className="w-2.5 h-2.5" />
+                        <span>استعادة السعر الآلي ({defaultSellingPriceYer.toLocaleString()} ر.ي)</span>
+                      </button>
+                    )}
                   </div>
                 </div>
 

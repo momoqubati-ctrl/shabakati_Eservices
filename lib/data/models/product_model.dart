@@ -114,12 +114,12 @@ class ProductModel {
     if (lower.contains('gemini')) return '${baseUrl}gemini.png';
     if (lower.contains('duolingo')) return '${baseUrl}duolingo.png';
     if (lower.contains('chatgpt') || lower.contains('gpt') || lower.contains('openai')) return '${baseUrl}chatgpt.png';
-    if (lower.contains('canva')) return '${baseUrl}canva.png';
-    if (lower.contains('adobe')) return '${baseUrl}adobe-express.png';
+    if (lower.contains('canva')) return '${baseUrl}canva_v2.png';
+    if (lower.contains('adobe')) return '${baseUrl}adobe_express_v2.png';
     if (lower.contains('linkedin')) return '${baseUrl}linkedin.png';
     if (lower.contains('coursera')) return '${baseUrl}coursera.png';
     if (lower.contains('office') || lower.contains('365') || lower.contains('microsoft')) return '${baseUrl}office365.png';
-    if (lower.contains('capcut')) return '${baseUrl}capcut.png';
+    if (lower.contains('capcut')) return '${baseUrl}capcut_v2.png';
     if (lower.contains('netflix')) return '${baseUrl}netflix.png';
     if (lower.contains('notion')) return '${baseUrl}notion.png';
     if (lower.contains('nordvpn') || lower.contains('vpn')) return '${baseUrl}nordvpn.png';

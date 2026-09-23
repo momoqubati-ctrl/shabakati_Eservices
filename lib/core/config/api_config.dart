@@ -24,15 +24,15 @@ class ApiConfig {
   // Telegram Bot Support Configuration
   static const String telegramBotUsername = String.fromEnvironment(
     'TELEGRAM_BOT_USERNAME',
-    defaultValue: 'ShabaktiBot',
+    defaultValue: 'sahm',
   );
   
   static const String telegramChannelUsername = String.fromEnvironment(
     'TELEGRAM_CHANNEL_USERNAME',
-    defaultValue: 'shabakti_services',
+    defaultValue: 'sahm',
   );
   
-  static const String defaultSupportLink = 'https://t.me/ShabaktiBot';
+  static const String defaultSupportLink = 'https://t.me/sahm';
 
   // Supabase Backend Configuration
   static const String supabaseUrl = String.fromEnvironment(

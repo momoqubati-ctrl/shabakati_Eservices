@@ -9,5 +9,5 @@ export const API_CONFIG = {
   supabaseAnonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || '',
 
   // Telegram bot info
-  telegramBotUsername: import.meta.env.VITE_TELEGRAM_BOT_USERNAME || 'ShabaktiBot',
+  telegramBotUsername: import.meta.env.VITE_TELEGRAM_BOT_USERNAME || 'sahm',
 };
