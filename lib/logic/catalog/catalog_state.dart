@@ -12,6 +12,7 @@ class CatalogLoaded extends CatalogState {
   final List<String> categories;
   final String selectedCategory;
   final String searchQuery;
+  final double exchangeRate;
 
   CatalogLoaded({
     required this.allProducts,
@@ -19,6 +20,7 @@ class CatalogLoaded extends CatalogState {
     required this.categories,
     this.selectedCategory = 'الكل',
     this.searchQuery = '',
+    this.exchangeRate = 535.0,
   });
 
   CatalogLoaded copyWith({
@@ -27,6 +29,7 @@ class CatalogLoaded extends CatalogState {
     List<String>? categories,
     String? selectedCategory,
     String? searchQuery,
+    double? exchangeRate,
   }) {
     return CatalogLoaded(
       allProducts: allProducts ?? this.allProducts,
@@ -34,6 +37,7 @@ class CatalogLoaded extends CatalogState {
       categories: categories ?? this.categories,
       selectedCategory: selectedCategory ?? this.selectedCategory,
       searchQuery: searchQuery ?? this.searchQuery,
+      exchangeRate: exchangeRate ?? this.exchangeRate,
     );
   }
 }

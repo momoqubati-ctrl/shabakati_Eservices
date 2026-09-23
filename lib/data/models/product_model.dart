@@ -1,3 +1,5 @@
+import 'package:intl/intl.dart';
+
 class ProductModel {
   final int id;
   final String sku;
@@ -7,6 +9,8 @@ class ProductModel {
   final PriceModel sellerPrice;
   final PriceModel sellerBasePrice;
   final PriceModel lineTotal;
+  final double? customPriceYer;
+  final int stockQuantity;
 
   ProductModel({
     required this.id,
@@ -17,9 +21,11 @@ class ProductModel {
     required this.sellerPrice,
     required this.sellerBasePrice,
     required this.lineTotal,
+    this.customPriceYer,
+    this.stockQuantity = 99,
   });
 
-  factory ProductModel.fromJson(Map<String, dynamic> json) {
+  factory ProductModel.fromJson(Map<String, dynamic> json, {double? customPriceYer, int? stockQuantity}) {
     return ProductModel(
       id: json['id'] as int,
       sku: json['sku'] ?? '',
@@ -29,10 +35,47 @@ class ProductModel {
       sellerPrice: PriceModel.fromJson(json['seller_price'] ?? {}),
       sellerBasePrice: PriceModel.fromJson(json['seller_base_price'] ?? {}),
       lineTotal: PriceModel.fromJson(json['line_total'] ?? {}),
+      customPriceYer: customPriceYer ?? (json['custom_price_yer'] != null ? (json['custom_price_yer'] as num).toDouble() : null),
+      stockQuantity: stockQuantity ?? (json['stock_quantity'] as int? ?? 99),
     );
   }
 
-  bool get isAvailable => availability == 'available';
+  ProductModel copyWith({
+    double? customPriceYer,
+    int? stockQuantity,
+  }) {
+    return ProductModel(
+      id: id,
+      sku: sku,
+      name: name,
+      availability: availability,
+      pricingQuantity: pricingQuantity,
+      sellerPrice: sellerPrice,
+      sellerBasePrice: sellerBasePrice,
+      lineTotal: lineTotal,
+      customPriceYer: customPriceYer ?? this.customPriceYer,
+      stockQuantity: stockQuantity ?? this.stockQuantity,
+    );
+  }
+
+  bool get isAvailable => availability == 'available' && stockQuantity > 0;
+
+  // احتساب السعر بالريال اليمني
+  double getFinalPriceYer({double exchangeRate = 535.0}) {
+    if (customPriceYer != null && customPriceYer! > 0) {
+      return customPriceYer!;
+    }
+    // السعر من المزود بالدولار مضروباً في سعر المصارفة مع هامش ربح 15%
+    return ((sellerPrice.amountCents / 100.0) * exchangeRate * 1.15).roundToDouble();
+  }
+
+  String displayPriceYer({double exchangeRate = 535.0}) {
+    final yer = getFinalPriceYer(exchangeRate: exchangeRate);
+    final formatter = NumberFormat('#,###');
+    return '${formatter.format(yer)} ر.ي';
+  }
+
+  String get displaySecondaryUsd => '\$${sellerPrice.amount.toStringAsFixed(2)} USD';
 
   String get category {
     final lower = name.toLowerCase();

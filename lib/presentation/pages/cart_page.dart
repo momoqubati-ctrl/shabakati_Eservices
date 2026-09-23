@@ -23,6 +23,7 @@ class CartPage extends StatelessWidget {
       builder: (dialogCtx) => CheckoutWarningDialog(
         totalAmount: cartState.totalAmount,
         currency: 'USD',
+        displayYer: cartState.displayTotalYer(),
         itemsCount: cartState.totalCount,
         initialTelegramUser: savedTelegram,
         onConfirm: (telegramUser, phone, paymentMethod) async {
@@ -166,11 +167,18 @@ class CartPage extends StatelessWidget {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      item.product.sellerPrice.displayPrice,
+                                      item.displayTotalYer(),
                                       style: TextStyle(
                                         color: colorScheme.primary,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 13,
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 13.5,
+                                      ),
+                                    ),
+                                    Text(
+                                      item.product.displaySecondaryUsd,
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.grey.shade500,
                                       ),
                                     ),
                                   ],
@@ -221,13 +229,22 @@ class CartPage extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             const Text('الإجمالي النهائي:', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-                            Text(
-                              state.displayTotal,
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w900,
-                                color: colorScheme.primary,
-                              ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  state.displayTotalYer(),
+                                  style: TextStyle(
+                                    fontSize: 19,
+                                    fontWeight: FontWeight.w900,
+                                    color: colorScheme.primary,
+                                  ),
+                                ),
+                                Text(
+                                  state.displayTotal,
+                                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                ),
+                              ],
                             ),
                           ],
                         ),

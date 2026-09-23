@@ -6,17 +6,30 @@ import { OrdersManagement } from './pages/OrdersManagement';
 import { OperationsReports } from './pages/OperationsReports';
 import { CatalogManagement } from './pages/CatalogManagement';
 import { OrderDetailModal } from './components/OrderDetailModal';
+import { LoginPage } from './pages/LoginPage';
 import { supabase } from './config/supabase';
 import { DigitalVaultService } from './services/digitalVaultService';
 
 export function App() {
+  // حالة التحقق وتسجيل الدخول
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return !!localStorage.getItem('shabakti_admin_auth');
+  });
+
   const [activeTab, setActiveTab] = useState('dashboard');
   const [orders, setOrders] = useState([]);
   const [products, setProducts] = useState([]);
   const [walletBalance, setWalletBalance] = useState(null);
   const [sellerProfile, setSellerProfile] = useState(null);
+  const [exchangeRate, setExchangeRate] = useState(535);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
+
+  // تسجيل الخروج
+  const handleLogout = () => {
+    localStorage.removeItem('shabakti_admin_auth');
+    setIsAuthenticated(false);
+  };
 
   // جلب الطلبات من Supabase
   const fetchOrders = async () => {
@@ -33,22 +46,33 @@ export function App() {
     }
   };
 
+  // جلب سعر الصرف من Supabase
+  const fetchSettings = async () => {
+    try {
+      const { data } = await supabase
+        .from('app_settings')
+        .select('*')
+        .eq('id', 'general_settings')
+        .single();
+      if (data?.usd_to_yer_rate) {
+        setExchangeRate(Number(data.usd_to_yer_rate));
+      }
+    } catch (_) {}
+  };
+
   // جلب بيانات المزود (Digital Vault)
   const fetchProviderData = async () => {
     try {
-      // 1. المحفظة
       const walletRes = await DigitalVaultService.getSellerWallet();
       if (walletRes?.success && walletRes?.data?.available_balance) {
         setWalletBalance(walletRes.data.available_balance.amount_cents);
       }
 
-      // 2. الملف الشخصي
       const profileRes = await DigitalVaultService.getSellerProfile();
       if (profileRes?.success && profileRes?.data) {
         setSellerProfile(profileRes.data);
       }
 
-      // 3. الكتالوج
       const catRes = await DigitalVaultService.getCatalogProducts();
       if (catRes?.success && catRes?.data) {
         setProducts(catRes.data);
@@ -61,11 +85,13 @@ export function App() {
   // تحديث شامل
   const handleRefreshAll = async () => {
     setIsLoading(true);
-    await Promise.all([fetchOrders(), fetchProviderData()]);
+    await Promise.all([fetchOrders(), fetchSettings(), fetchProviderData()]);
     setIsLoading(false);
   };
 
   useEffect(() => {
+    if (!isAuthenticated) return;
+
     handleRefreshAll();
 
     // تفعيل الاستماع اللحظي (Supabase Realtime Stream)
@@ -74,9 +100,15 @@ export function App() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'orders' },
-        (payload) => {
-          console.log('Realtime Order Event received:', payload);
-          fetchOrders(); // إعادة جلب فوري عند أي تغيير
+        () => {
+          fetchOrders();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'app_settings' },
+        () => {
+          fetchSettings();
         }
       )
       .subscribe();
@@ -84,7 +116,11 @@ export function App() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [isAuthenticated]);
+
+  if (!isAuthenticated) {
+    return <LoginPage onLoginSuccess={() => setIsAuthenticated(true)} />;
+  }
 
   const pendingCount = orders.filter(
     (o) => o.fulfillment_status === 'processing' || o.status === 'paid'
@@ -119,8 +155,10 @@ export function App() {
         <Navbar
           title={getPageTitle()}
           walletBalance={walletBalance}
+          exchangeRate={exchangeRate}
           isLoading={isLoading}
           onRefresh={handleRefreshAll}
+          onLogout={handleLogout}
         />
 
         <main className="flex-1 p-8 overflow-y-auto">

@@ -26,7 +26,10 @@ void main() async {
   // تهيئة عميل Dio مع معالج توقيع Digital Vault وخدمات التخزين
   final dioClient = DioClient();
   final secureStorage = SecureStorageService();
-  final productRepository = ProductRepository(dioClient);
+  final productRepository = ProductRepository(
+    dioClient,
+    supabaseClient: supabaseClient,
+  );
   final orderRepository = OrderRepository(
     dioClient: dioClient,
     supabaseClient: supabaseClient,

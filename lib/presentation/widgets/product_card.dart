@@ -4,11 +4,13 @@ import '../../data/models/product_model.dart';
 class ProductCard extends StatelessWidget {
   final ProductModel product;
   final VoidCallback onAddToCart;
+  final double exchangeRate;
 
   const ProductCard({
     super.key,
     required this.product,
     required this.onAddToCart,
+    this.exchangeRate = 535.0,
   });
 
   IconData _getCategoryIcon(String category) {
@@ -33,6 +35,7 @@ class ProductCard extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isAvail = product.isAvailable;
+    final stockQty = product.stockQuantity;
 
     return Card(
       elevation: 0,
@@ -47,7 +50,7 @@ class ProductCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // رأس البطاقة: أيقونة وتصنيف
+            // رأس البطاقة: أيقونة وتصنيف وحالة الكمية
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -72,13 +75,24 @@ class ProductCard extends StatelessWidget {
                       color: isAvail ? Colors.green.shade200 : Colors.red.shade200,
                     ),
                   ),
-                  child: Text(
-                    isAvail ? 'متوفر' : 'نفذت الكمية',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: isAvail ? Colors.green.shade800 : Colors.red.shade800,
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isAvail ? Icons.inventory_2_rounded : Icons.cancel_outlined,
+                        size: 11,
+                        color: isAvail ? Colors.green.shade800 : Colors.red.shade800,
+                      ),
+                      const SizedBox(width: 3),
+                      Text(
+                        isAvail ? 'متوفر: $stockQty' : 'نفذت الكمية',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: isAvail ? Colors.green.shade800 : Colors.red.shade800,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -106,7 +120,7 @@ class ProductCard extends StatelessWidget {
 
             const Spacer(),
 
-            // السعر وزر الإضافة
+            // السعر بالريال اليمني + المعادل بالدولار وزر الإضافة
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               crossAxisAlignment: CrossAxisAlignment.end,
@@ -115,15 +129,19 @@ class ProductCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'السعر',
-                      style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
-                    ),
-                    Text(
-                      product.sellerPrice.displayPrice,
+                      product.displayPriceYer(exchangeRate: exchangeRate),
                       style: TextStyle(
-                        fontSize: 15,
+                        fontSize: 14.5,
                         fontWeight: FontWeight.w900,
                         color: colorScheme.primary,
+                      ),
+                    ),
+                    Text(
+                      product.displaySecondaryUsd,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.grey.shade500,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
@@ -143,7 +161,7 @@ class ProductCard extends StatelessWidget {
                     children: const [
                       Icon(Icons.add_shopping_cart_rounded, size: 16),
                       SizedBox(width: 4),
-                      Text('إضافة', style: TextStyle(fontSize: 12)),
+                      Text('شراء', style: TextStyle(fontSize: 12)),
                     ],
                   ),
                 ),

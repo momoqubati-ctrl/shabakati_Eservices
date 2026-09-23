@@ -21,6 +21,7 @@ class CatalogCubit extends Cubit<CatalogState> {
         allProducts: products,
         filteredProducts: products,
         categories: catSet.toList(),
+        exchangeRate: repository.currentExchangeRate,
       ));
     } catch (e) {
       emit(CatalogError(e.toString().replaceAll('Exception: ', '')));

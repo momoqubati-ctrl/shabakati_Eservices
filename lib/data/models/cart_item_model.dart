@@ -1,3 +1,4 @@
+import 'package:intl/intl.dart';
 import 'product_model.dart';
 
 class CartItemModel {
@@ -12,6 +13,16 @@ class CartItemModel {
   int get totalCents => product.sellerPrice.amountCents * quantity;
   double get totalAmount => totalCents / 100.0;
   String get displayTotal => '\$${totalAmount.toStringAsFixed(2)} ${product.sellerPrice.currency}';
+
+  double totalAmountYer({double exchangeRate = 535.0}) {
+    return product.getFinalPriceYer(exchangeRate: exchangeRate) * quantity;
+  }
+
+  String displayTotalYer({double exchangeRate = 535.0}) {
+    final yer = totalAmountYer(exchangeRate: exchangeRate);
+    final formatter = NumberFormat('#,###');
+    return '${formatter.format(yer)} ر.ي';
+  }
 
   CartItemModel copyWith({
     ProductModel? product,

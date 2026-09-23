@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 class CheckoutWarningDialog extends StatefulWidget {
   final double totalAmount;
   final String currency;
+  final String? displayYer;
   final int itemsCount;
   final String? initialTelegramUser;
   final Function(String telegramUser, String phone, String paymentMethod) onConfirm;
@@ -11,6 +12,7 @@ class CheckoutWarningDialog extends StatefulWidget {
     super.key,
     required this.totalAmount,
     required this.currency,
+    this.displayYer,
     required this.itemsCount,
     this.initialTelegramUser,
     required this.onConfirm,
@@ -116,7 +118,7 @@ class _CheckoutWarningDialogState extends State<CheckoutWarningDialog> {
               ),
               const SizedBox(height: 16),
 
-              // ملخص المجموع
+              // ملخص المجموع بالريال اليمني والدولار
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
@@ -127,13 +129,26 @@ class _CheckoutWarningDialogState extends State<CheckoutWarningDialog> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text('إجمالي الطلب (${widget.itemsCount} عناصر):', style: const TextStyle(fontWeight: FontWeight.w600)),
-                    Text(
-                      '\$${widget.totalAmount.toStringAsFixed(2)} ${widget.currency}',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                        color: colorScheme.primary,
-                      ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          widget.displayYer ?? '\$${widget.totalAmount.toStringAsFixed(2)} ${widget.currency}',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            color: colorScheme.primary,
+                          ),
+                        ),
+                        if (widget.displayYer != null)
+                          Text(
+                            '(\$${widget.totalAmount.toStringAsFixed(2)} ${widget.currency})',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                      ],
                     ),
                   ],
                 ),
@@ -179,8 +194,8 @@ class _CheckoutWarningDialogState extends State<CheckoutWarningDialog> {
                 items: const [
                   DropdownMenuItem(value: 'بطاقة بنكية / ميزة / فيزا', child: Text('💳 بطاقة بنكية (Visa / MasterCard)')),
                   DropdownMenuItem(value: 'Apple Pay / Google Pay', child: Text('📱 Apple Pay / Google Pay')),
-                  DropdownMenuItem(value: 'محفظة إلكترونية / STC Pay', child: Text('👛 محفظة رقمية (STC Pay / Zain)')),
-                  DropdownMenuItem(value: 'تحويل بنكي مباشر', child: Text('🏦 تحويل بنكي سريع')),
+                  DropdownMenuItem(value: 'محفظة إلكترونية / STC Pay', child: Text('👛 محفظة رقمية (STC Pay / Zain / كريمي)')),
+                  DropdownMenuItem(value: 'تحويل بنكي مباشر', child: Text('🏦 تحويل بنكي / صرافة')),
                 ],
                 onChanged: (val) {
                   if (val != null) setState(() => _selectedPaymentMethod = val);

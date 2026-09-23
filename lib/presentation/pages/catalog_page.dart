@@ -146,6 +146,7 @@ class CatalogPage extends StatelessWidget {
                         final product = products[index];
                         return ProductCard(
                           product: product,
+                          exchangeRate: state.exchangeRate,
                           onAddToCart: () {
                             context.read<CartCubit>().addProduct(product);
                             ScaffoldMessenger.of(context).hideCurrentSnackBar();
