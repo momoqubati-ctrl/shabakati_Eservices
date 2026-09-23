@@ -60,13 +60,17 @@ class ProductModel {
 
   bool get isAvailable => availability == 'available' && stockQuantity > 0;
 
-  // احتساب السعر بالريال اليمني
+  // احتساب السعر بالريال اليمني مع إضافة هامش 1000 ريال والتقريب لأعلى إلى أقرب ألف
   double getFinalPriceYer({double exchangeRate = 535.0}) {
     if (customPriceYer != null && customPriceYer! > 0) {
       return customPriceYer!;
     }
-    // السعر من المزود بالدولار مضروباً في سعر المصارفة مع هامش ربح 15%
-    return ((sellerPrice.amountCents / 100.0) * exchangeRate * 1.15).roundToDouble();
+    // 1. التكلفة من المزود بالريال اليمني
+    final costYer = (sellerPrice.amountCents / 100.0) * exchangeRate;
+    // 2. إضافة هامش ربح 1000 ريال يمني
+    final withMargin = costYer + 1000.0;
+    // 3. التقريب لأعلى إلى أقرب ألف (Ceil to next 1000, مثل 1163 تصبح 2000)
+    return (withMargin / 1000.0).ceil() * 1000.0;
   }
 
   String displayPriceYer({double exchangeRate = 535.0}) {

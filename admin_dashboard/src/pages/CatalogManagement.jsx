@@ -108,9 +108,12 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
   // حفظ سعر البيع بالريال والكمية المتاحة لخدمة معينة
   const handleSaveProductPricing = async (product) => {
     const custom = customPricing[product.id] || {};
+    const costUsd = (product.seller_price?.amount_cents || 0) / 100;
+    const costYer = costUsd * exchangeRate;
+    const defaultPriceYer = Math.ceil((costYer + 1000) / 1000) * 1000;
     const priceYer = custom.customPriceYer 
       ? Number(custom.customPriceYer) 
-      : Math.round(((product.seller_price?.amount_cents || 0) / 100) * exchangeRate * 1.15); // تلقائي مع هامش 15%
+      : defaultPriceYer;
 
     setSavingProductId(product.id);
     try {
@@ -222,9 +225,10 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
           const isAvail = product.availability === 'available';
 
           const custom = customPricing[product.id] || {};
+          const defaultSellingPriceYer = Math.ceil((costYer + 1000) / 1000) * 1000;
           const currentSellingPriceYer = custom.customPriceYer !== undefined && custom.customPriceYer !== ''
             ? custom.customPriceYer 
-            : Math.round(costYer * 1.15); // الافتراضي مع ربح 15%
+            : defaultSellingPriceYer;
 
           const stockQty = custom.stockQuantity ?? 99;
           const isSaved = custom.saved;
