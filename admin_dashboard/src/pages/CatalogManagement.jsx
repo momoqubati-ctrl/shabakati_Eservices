@@ -8,10 +8,45 @@ import {
   Check, 
   AlertCircle,
   Package,
-  TrendingUp
+  TrendingUp,
+  Image as ImageIcon
 } from 'lucide-react';
 import { DigitalVaultService } from '../services/digitalVaultService';
 import { supabase } from '../config/supabase';
+
+const ICON_BASE_URL = 'https://enutfwspwrzpvhmtgftl.supabase.co/storage/v1/object/public/service-icons/';
+
+export const PRESET_ICONS = [
+  { name: 'Gemini Pro', icon: `${ICON_BASE_URL}gemini.png` },
+  { name: 'ChatGPT / OpenAI', icon: `${ICON_BASE_URL}chatgpt.png` },
+  { name: 'Duolingo', icon: `${ICON_BASE_URL}duolingo.png` },
+  { name: 'Canva Pro', icon: `${ICON_BASE_URL}canva.png` },
+  { name: 'Adobe Express', icon: `${ICON_BASE_URL}adobe-express.png` },
+  { name: 'LinkedIn Premium', icon: `${ICON_BASE_URL}linkedin.png` },
+  { name: 'Coursera Plus', icon: `${ICON_BASE_URL}coursera.png` },
+  { name: 'Microsoft 365', icon: `${ICON_BASE_URL}office365.png` },
+  { name: 'CapCut Pro', icon: `${ICON_BASE_URL}capcut.png` },
+  { name: 'Netflix', icon: `${ICON_BASE_URL}netflix.png` },
+  { name: 'Notion AI', icon: `${ICON_BASE_URL}notion.png` },
+  { name: 'NordVPN', icon: `${ICON_BASE_URL}nordvpn.png` }
+];
+
+export const getDefaultIcon = (sku = '', name = '') => {
+  const lower = `${sku.toLowerCase()} ${name.toLowerCase()}`;
+  if (lower.includes('gemini')) return `${ICON_BASE_URL}gemini.png`;
+  if (lower.includes('duolingo')) return `${ICON_BASE_URL}duolingo.png`;
+  if (lower.includes('chatgpt') || lower.includes('gpt') || lower.includes('openai')) return `${ICON_BASE_URL}chatgpt.png`;
+  if (lower.includes('canva')) return `${ICON_BASE_URL}canva.png`;
+  if (lower.includes('adobe')) return `${ICON_BASE_URL}adobe-express.png`;
+  if (lower.includes('linkedin')) return `${ICON_BASE_URL}linkedin.png`;
+  if (lower.includes('coursera')) return `${ICON_BASE_URL}coursera.png`;
+  if (lower.includes('office') || lower.includes('365') || lower.includes('microsoft')) return `${ICON_BASE_URL}office365.png`;
+  if (lower.includes('capcut')) return `${ICON_BASE_URL}capcut.png`;
+  if (lower.includes('netflix')) return `${ICON_BASE_URL}netflix.png`;
+  if (lower.includes('notion')) return `${ICON_BASE_URL}notion.png`;
+  if (lower.includes('nordvpn') || lower.includes('vpn')) return `${ICON_BASE_URL}nordvpn.png`;
+  return `${ICON_BASE_URL}gemini.png`;
+};
 
 export const CatalogManagement = ({ initialProducts = [], onSync }) => {
   const [products, setProducts] = useState(initialProducts);
@@ -38,7 +73,7 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
         setExchangeRate(Number(settings.usd_to_yer_rate));
       }
 
-      // 2. جلب أسعار البيع المخصصة لكل منتج
+      // 2. جلب أسعار البيع والكميات والأيقونات المخصصة لكل منتج
       const { data: productSettings } = await supabase
         .from('product_settings')
         .select('*');
@@ -50,6 +85,7 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
             customPriceYer: ps.custom_price_yer || '',
             stockQuantity: ps.stock_quantity ?? 99,
             isActive: ps.is_active ?? true,
+            iconUrl: ps.icon_url || '',
           };
         });
         setCustomPricing(pricingMap);
@@ -105,7 +141,7 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
     }
   };
 
-  // حفظ سعر البيع بالريال والكمية المتاحة لخدمة معينة
+  // حفظ سعر البيع بالريال والكمية المتاحة والأيقونة لخدمة معينة
   const handleSaveProductPricing = async (product) => {
     const custom = customPricing[product.id] || {};
     const costUsd = (product.seller_price?.amount_cents || 0) / 100;
@@ -114,6 +150,7 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
     const priceYer = custom.customPriceYer 
       ? Number(custom.customPriceYer) 
       : defaultPriceYer;
+    const effectiveIconUrl = custom.iconUrl || getDefaultIcon(product.sku, product.name);
 
     setSavingProductId(product.id);
     try {
@@ -125,6 +162,7 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
           custom_price_yer: priceYer,
           custom_price_usd: (priceYer / exchangeRate).toFixed(2),
           stock_quantity: custom.stockQuantity ?? 99,
+          icon_url: effectiveIconUrl,
           is_active: custom.isActive ?? true,
           updated_at: new Date().toISOString()
         });
@@ -137,6 +175,7 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
         [product.id]: {
           ...prev[product.id],
           customPriceYer: priceYer,
+          iconUrl: effectiveIconUrl,
           saved: true
         }
       }));
@@ -229,6 +268,7 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
           const currentSellingPriceYer = custom.customPriceYer !== undefined && custom.customPriceYer !== ''
             ? custom.customPriceYer 
             : defaultSellingPriceYer;
+          const currentIconUrl = custom.iconUrl || getDefaultIcon(product.sku, product.name);
 
           const stockQty = custom.stockQuantity ?? 99;
           const isSaved = custom.saved;
@@ -258,12 +298,82 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
                   </div>
                 </div>
 
-                <h4 className="font-bold text-slate-900 dark:text-white text-sm mt-3 line-clamp-2">
-                  {product.name}
-                </h4>
-                <span className="text-xs text-slate-400 font-mono block mt-1">
-                  SKU: {product.sku}
-                </span>
+                {/* عرض الأيقونة واسم الخدمة */}
+                <div className="flex items-start gap-3 mt-3">
+                  <div className="w-12 h-12 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-1.5 shadow-sm flex items-center justify-center shrink-0">
+                    <img 
+                      src={currentIconUrl} 
+                      alt={product.name} 
+                      className="w-full h-full object-contain"
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = getDefaultIcon(product.sku, product.name);
+                      }}
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-bold text-slate-900 dark:text-white text-sm line-clamp-2 leading-tight">
+                      {product.name}
+                    </h4>
+                    <span className="text-xs text-slate-400 font-mono block mt-1">
+                      SKU: {product.sku}
+                    </span>
+                  </div>
+                </div>
+
+                {/* قسم اختيار أو تغيير الأيقونة */}
+                <div className="mt-3 p-2.5 bg-slate-50/80 dark:bg-slate-900/40 rounded-xl border border-slate-200/80 dark:border-slate-700/60">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                      <ImageIcon className="w-3.5 h-3.5 text-blue-500" />
+                      <span>أيقونة الخدمة:</span>
+                    </label>
+                    <span className="text-[10px] text-slate-400">انقر لاختيار أيقونة</span>
+                  </div>
+                  {/* شريط الأيقونات السريعة */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+                    {PRESET_ICONS.map((pIcon) => (
+                      <button
+                        key={pIcon.name}
+                        type="button"
+                        onClick={() => {
+                          setCustomPricing(prev => ({
+                            ...prev,
+                            [product.id]: {
+                              ...prev[product.id],
+                              iconUrl: pIcon.icon
+                            }
+                          }));
+                        }}
+                        title={pIcon.name}
+                        className={`w-7 h-7 rounded-lg p-1 shrink-0 border transition-all ${
+                          currentIconUrl === pIcon.icon 
+                            ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/50 ring-2 ring-blue-500/20' 
+                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-blue-400'
+                        }`}
+                      >
+                        <img src={pIcon.icon} alt={pIcon.name} className="w-full h-full object-contain" />
+                      </button>
+                    ))}
+                  </div>
+                  {/* حقل رابط مخصص */}
+                  <input
+                    type="url"
+                    placeholder="أو الصق رابط صورة مخصص (URL)"
+                    value={custom.iconUrl || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setCustomPricing(prev => ({
+                        ...prev,
+                        [product.id]: {
+                          ...prev[product.id],
+                          iconUrl: val
+                        }
+                      }));
+                    }}
+                    className="w-full mt-1.5 px-2 py-1 text-[10px] rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:border-blue-500 font-mono text-slate-600 dark:text-slate-300"
+                  />
+                </div>
 
                 {/* سعر التكلفة من المزود */}
                 <div className="mt-3 p-3 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-700/60 text-xs flex justify-between items-center">

@@ -11,6 +11,7 @@ class ProductModel {
   final PriceModel lineTotal;
   final double? customPriceYer;
   final int stockQuantity;
+  final String? iconUrl;
 
   ProductModel({
     required this.id,
@@ -23,9 +24,16 @@ class ProductModel {
     required this.lineTotal,
     this.customPriceYer,
     this.stockQuantity = 99,
+    this.iconUrl,
   });
 
-  factory ProductModel.fromJson(Map<String, dynamic> json, {double? customPriceYer, int? stockQuantity}) {
+  factory ProductModel.fromJson(
+    Map<String, dynamic> json, {
+    double? customPriceYer,
+    int? stockQuantity,
+    String? iconUrl,
+  }) {
+    final effectiveIconUrl = iconUrl ?? json['icon_url'] ?? getDefaultIconUrl(json['sku'] ?? '', json['name'] ?? '');
     return ProductModel(
       id: json['id'] as int,
       sku: json['sku'] ?? '',
@@ -37,12 +45,14 @@ class ProductModel {
       lineTotal: PriceModel.fromJson(json['line_total'] ?? {}),
       customPriceYer: customPriceYer ?? (json['custom_price_yer'] != null ? (json['custom_price_yer'] as num).toDouble() : null),
       stockQuantity: stockQuantity ?? (json['stock_quantity'] as int? ?? 99),
+      iconUrl: effectiveIconUrl,
     );
   }
 
   ProductModel copyWith({
     double? customPriceYer,
     int? stockQuantity,
+    String? iconUrl,
   }) {
     return ProductModel(
       id: id,
@@ -55,6 +65,7 @@ class ProductModel {
       lineTotal: lineTotal,
       customPriceYer: customPriceYer ?? this.customPriceYer,
       stockQuantity: stockQuantity ?? this.stockQuantity,
+      iconUrl: iconUrl ?? this.iconUrl,
     );
   }
 
@@ -95,6 +106,24 @@ class ProductModel {
       return 'تراخيص وبرامج';
     }
     return 'خدمات متنوعة';
+  }
+
+  static String? getDefaultIconUrl(String sku, String name) {
+    const baseUrl = 'https://enutfwspwrzpvhmtgftl.supabase.co/storage/v1/object/public/service-icons/';
+    final lower = '${sku.toLowerCase()} ${name.toLowerCase()}';
+    if (lower.contains('gemini')) return '${baseUrl}gemini.png';
+    if (lower.contains('duolingo')) return '${baseUrl}duolingo.png';
+    if (lower.contains('chatgpt') || lower.contains('gpt') || lower.contains('openai')) return '${baseUrl}chatgpt.png';
+    if (lower.contains('canva')) return '${baseUrl}canva.png';
+    if (lower.contains('adobe')) return '${baseUrl}adobe-express.png';
+    if (lower.contains('linkedin')) return '${baseUrl}linkedin.png';
+    if (lower.contains('coursera')) return '${baseUrl}coursera.png';
+    if (lower.contains('office') || lower.contains('365') || lower.contains('microsoft')) return '${baseUrl}office365.png';
+    if (lower.contains('capcut')) return '${baseUrl}capcut.png';
+    if (lower.contains('netflix')) return '${baseUrl}netflix.png';
+    if (lower.contains('notion')) return '${baseUrl}notion.png';
+    if (lower.contains('nordvpn') || lower.contains('vpn')) return '${baseUrl}nordvpn.png';
+    return null;
   }
 }
 

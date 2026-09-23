@@ -149,11 +149,27 @@ class CartPage extends StatelessWidget {
                               Container(
                                 width: 48,
                                 height: 48,
+                                padding: const EdgeInsets.all(6),
                                 decoration: BoxDecoration(
-                                  color: colorScheme.primaryContainer,
+                                  color: Colors.white,
                                   borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: colorScheme.outlineVariant.withAlpha(90),
+                                  ),
                                 ),
-                                child: Icon(Icons.stars_rounded, color: colorScheme.primary),
+                                child: (item.product.iconUrl != null && item.product.iconUrl!.isNotEmpty)
+                                    ? ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Image.network(
+                                          item.product.iconUrl!,
+                                          fit: BoxFit.contain,
+                                          errorBuilder: (context, error, stackTrace) => Icon(
+                                            Icons.stars_rounded,
+                                            color: colorScheme.primary,
+                                          ),
+                                        ),
+                                      )
+                                    : Icon(Icons.stars_rounded, color: colorScheme.primary),
                               ),
                               const SizedBox(width: 12),
                               Expanded(

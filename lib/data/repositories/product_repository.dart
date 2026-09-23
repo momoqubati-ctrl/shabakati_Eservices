@@ -70,6 +70,7 @@ class ProductRepository implements IProductRepository {
 
           double? customYer;
           int? stock;
+          String? iconUrl;
 
           if (customSetting != null) {
             if (customSetting['custom_price_yer'] != null) {
@@ -78,12 +79,16 @@ class ProductRepository implements IProductRepository {
             if (customSetting['stock_quantity'] != null) {
               stock = customSetting['stock_quantity'] as int;
             }
+            if (customSetting['icon_url'] != null && (customSetting['icon_url'] as String).isNotEmpty) {
+              iconUrl = customSetting['icon_url'] as String;
+            }
           }
 
           return ProductModel.fromJson(
             json,
             customPriceYer: customYer,
             stockQuantity: stock,
+            iconUrl: iconUrl,
           );
         }).toList();
       } else {

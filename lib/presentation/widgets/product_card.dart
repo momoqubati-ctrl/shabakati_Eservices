@@ -55,16 +55,41 @@ class ProductCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Container(
-                  padding: const EdgeInsets.all(8),
+                  width: 44,
+                  height: 44,
+                  padding: const EdgeInsets.all(7),
                   decoration: BoxDecoration(
-                    color: colorScheme.primaryContainer.withAlpha(150),
-                    borderRadius: BorderRadius.circular(12),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(13),
+                    border: Border.all(
+                      color: colorScheme.outlineVariant.withAlpha(90),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withAlpha(12),
+                        blurRadius: 5,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
-                  child: Icon(
-                    _getCategoryIcon(product.category),
-                    size: 20,
-                    color: colorScheme.primary,
-                  ),
+                  child: (product.iconUrl != null && product.iconUrl!.isNotEmpty)
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(
+                            product.iconUrl!,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) => Icon(
+                              _getCategoryIcon(product.category),
+                              size: 20,
+                              color: colorScheme.primary,
+                            ),
+                          ),
+                        )
+                      : Icon(
+                          _getCategoryIcon(product.category),
+                          size: 20,
+                          color: colorScheme.primary,
+                        ),
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
