@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../core/services/auth_biometric_service.dart';
+import '../../core/services/basgate_payment_service.dart';
 import '../../core/services/secure_storage_service.dart';
 import '../../logic/cart/cart_cubit.dart';
 import '../../logic/cart/cart_state.dart';
@@ -13,7 +15,10 @@ class CartPage extends StatelessWidget {
 
   void _showCheckoutDialog(BuildContext context, CartState cartState) async {
     final storage = SecureStorageService();
+    final authService = AuthBiometricService();
     final savedTelegram = await storage.getSavedTelegramUser();
+    final savedPhone = await authService.getSavedAccount();
+    final savedName = await authService.getSavedUserName();
 
     if (!context.mounted) return;
 
@@ -26,11 +31,152 @@ class CartPage extends StatelessWidget {
         displayYer: cartState.displayTotalYer(),
         itemsCount: cartState.totalCount,
         initialTelegramUser: savedTelegram,
+        initialPhone: savedPhone,
+        onPayWithBasGate: (telegramUser, phone) async {
+          final ordersCubit = context.read<OrdersCubit>();
+          final cartCubit = context.read<CartCubit>();
+          final basGateService = BasGatePaymentService();
+
+          // 1. إظهار مؤشر الاتصال بالبوابة
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (_) => const Center(
+              child: Card(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text(
+                        'جارٍ فتح بوابة الدفع الإلكترونية (BasGate)...',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+
+          // 2. تشغيل تدفق الدفع عبر البوابة
+          final orderId = 'ORD_${DateTime.now().millisecondsSinceEpoch}';
+          final effectivePhone = phone.isNotEmpty ? phone : (savedPhone ?? '777000000');
+
+          final paymentResult = await basGateService.payWithBasGate(
+            context: context,
+            amountYer: cartState.totalAmountYer(),
+            orderId: orderId,
+            userAccount: effectivePhone,
+            customerPhone: effectivePhone,
+            customerName: (savedName != null && savedName.isNotEmpty) ? savedName : 'عميل شبكتي',
+            description: 'طلب خدمات شبكتي (${cartState.totalCount} عنصر)',
+          );
+
+          if (!context.mounted) return;
+          Navigator.pop(context); // إغلاق مؤشر التحميل
+
+          // 3. معالجة نتيجة الدفع
+          if (paymentResult.isSuccess) {
+            // ✅ تم الدفع بنجاح لدى البنك: يتم إرسال وتسجيل الطلب رسمياً
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (_) => const Center(child: CircularProgressIndicator()),
+            );
+
+            final submitResult = await ordersCubit.submitOrder(
+              items: cartState.items,
+              telegramUser: telegramUser,
+              contactPhone: effectivePhone,
+            );
+
+            if (!context.mounted) return;
+            Navigator.pop(context); // إغلاق مؤشر التسجيل
+
+            cartCubit.clearCart();
+            ordersCubit.loadOrders();
+
+            showDialog(
+              context: context,
+              builder: (ctx) => Directionality(
+                textDirection: TextDirection.rtl,
+                child: AlertDialog(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  title: Row(
+                    children: const [
+                      Icon(Icons.check_circle_rounded, color: Colors.green, size: 28),
+                      SizedBox(width: 8),
+                      Text('تم الدفع واستلام الطلب'),
+                    ],
+                  ),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        submitResult?.message ?? 'تم خصم المبلغ بنجاح عبر بوابة BasGate وتأكيد طلبك.',
+                        style: const TextStyle(fontSize: 13.5, height: 1.4),
+                      ),
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.green.shade200),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'المبلغ المسدد: ${cartState.displayTotalYer()}',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                            ),
+                            if (paymentResult.paymentId != null)
+                              Text(
+                                'رقم العملية البنكية: ${paymentResult.paymentId}',
+                                style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  actions: [
+                    FilledButton(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        onNavigateToOrders();
+                      },
+                      child: const Text('عرض طلباتي واشتراكاتي'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          } else if (paymentResult.isCancelled) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('⚠️ تم إلغاء عملية الدفع. لم يتم خصم أي مبلغ من حسابك.'),
+                backgroundColor: Color(0xFFF59E0B),
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('❌ تعثر إتمام الدفع: ${paymentResult.message}'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        },
         onConfirm: (telegramUser, phone, paymentMethod) async {
           final ordersCubit = context.read<OrdersCubit>();
           final cartCubit = context.read<CartCubit>();
 
-          // إظهار مؤشر تقدم أثناء الدفع والربط مع الـ API
           showDialog(
             context: context,
             barrierDismissible: false,
