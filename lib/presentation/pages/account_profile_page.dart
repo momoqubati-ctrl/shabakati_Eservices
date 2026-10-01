@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../core/services/whatsapp_launcher.dart';
 import '../../logic/auth/auth_cubit.dart';
 import '../../logic/auth/auth_state.dart';
 import '../../logic/cart/cart_cubit.dart';
@@ -169,6 +170,33 @@ class _AccountProfilePageState extends State<AccountProfilePage> {
                   ),
                 ),
 
+                const SizedBox(height: 20),
+
+                // قسم المساعدة والدعم الفني عبر واتساب
+                const Text('المساعدة والدعم', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 10),
+
+                Container(
+                  decoration: BoxDecoration(
+                    color: theme.cardColor,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: colorScheme.outlineVariant.withAlpha(100)),
+                  ),
+                  child: ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF25D366).withAlpha(30),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.support_agent_rounded, color: Color(0xFF25D366), size: 22),
+                    ),
+                    title: const Text('الدعم الفني عبر واتساب', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    subtitle: const Text('خدمة العملاء والدردشة المباشرة (967737241475+)', style: TextStyle(fontSize: 11)),
+                    trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
+                    onTap: () => WhatsAppLauncher.openSupportChat(),
+                  ),
+                ),
                 const SizedBox(height: 32),
 
                 // زر تسجيل الخروج

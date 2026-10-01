@@ -21,6 +21,12 @@ class ApiConfig {
     defaultValue: 'ssec_96c632b8e715694af4b0fa62c8872cd2c99901fe0f13323c0cfb55251e335954',
   );
   
+  // WhatsApp Support Configuration
+  static const String whatsappSupportPhone = String.fromEnvironment(
+    'WHATSAPP_SUPPORT_PHONE',
+    defaultValue: '967737241475',
+  );
+  
   // Telegram Bot Support Configuration
   static const String telegramBotUsername = String.fromEnvironment(
     'TELEGRAM_BOT_USERNAME',
@@ -32,7 +38,7 @@ class ApiConfig {
     defaultValue: 'sahm',
   );
   
-  static const String defaultSupportLink = 'https://t.me/sahm';
+  static const String defaultSupportLink = 'https://wa.me/967737241475';
 
   // Supabase Backend Configuration (Public Anon Key)
   static const String supabaseUrl = String.fromEnvironment(

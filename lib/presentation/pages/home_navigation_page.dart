@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../core/services/whatsapp_launcher.dart';
 import '../../logic/cart/cart_cubit.dart';
-import '../../logic/cart/cart_state.dart';
 import 'account_profile_page.dart';
 import 'cart_page.dart';
 import 'catalog_page.dart';
@@ -19,6 +19,9 @@ class _HomeNavigationPageState extends State<HomeNavigationPage> {
 
   @override
   Widget build(BuildContext context) {
+    final cartState = context.watch<CartCubit>().state;
+    final bool hasCartBar = _currentIndex == 1 && cartState.items.isNotEmpty;
+
     final List<Widget> pages = [
       const CatalogPage(),
       CartPage(onNavigateToOrders: () {
@@ -35,6 +38,17 @@ class _HomeNavigationPageState extends State<HomeNavigationPage> {
           index: _currentIndex,
           children: pages,
         ),
+        floatingActionButtonLocation: _SupportFabLocation(hasCartBar: hasCartBar),
+        floatingActionButton: FloatingActionButton(
+          heroTag: 'whatsapp_support_fab',
+          onPressed: () => WhatsAppLauncher.openSupportChat(),
+          backgroundColor: const Color(0xFF25D366),
+          foregroundColor: Colors.white,
+          elevation: 4,
+          shape: const CircleBorder(),
+          tooltip: 'الدعم الفني والمساعدة عبر واتساب',
+          child: const Icon(Icons.chat_rounded, size: 28),
+        ),
         bottomNavigationBar: NavigationBar(
           selectedIndex: _currentIndex,
           onDestinationSelected: (index) {
@@ -47,23 +61,15 @@ class _HomeNavigationPageState extends State<HomeNavigationPage> {
               label: 'الخدمات والكتالوج',
             ),
             NavigationDestination(
-              icon: BlocBuilder<CartCubit, CartState>(
-                builder: (context, state) {
-                  return Badge(
-                    isLabelVisible: state.totalCount > 0,
-                    label: Text('${state.totalCount}'),
-                    child: const Icon(Icons.shopping_cart_outlined),
-                  );
-                },
+              icon: Badge(
+                isLabelVisible: cartState.totalCount > 0,
+                label: Text('${cartState.totalCount}'),
+                child: const Icon(Icons.shopping_cart_outlined),
               ),
-              selectedIcon: BlocBuilder<CartCubit, CartState>(
-                builder: (context, state) {
-                  return Badge(
-                    isLabelVisible: state.totalCount > 0,
-                    label: Text('${state.totalCount}'),
-                    child: const Icon(Icons.shopping_cart_rounded),
-                  );
-                },
+              selectedIcon: Badge(
+                isLabelVisible: cartState.totalCount > 0,
+                label: Text('${cartState.totalCount}'),
+                child: const Icon(Icons.shopping_cart_rounded),
               ),
               label: 'السلة',
             ),
@@ -81,5 +87,28 @@ class _HomeNavigationPageState extends State<HomeNavigationPage> {
         ),
       ),
     );
+  }
+}
+
+class _SupportFabLocation extends FloatingActionButtonLocation {
+  final bool hasCartBar;
+
+  const _SupportFabLocation({this.hasCartBar = false});
+
+  @override
+  Offset getOffset(ScaffoldPrelayoutGeometry scaffoldGeometry) {
+    final double fabWidth = scaffoldGeometry.floatingActionButtonSize.width;
+    final double fabHeight = scaffoldGeometry.floatingActionButtonSize.height;
+
+    // End in RTL is left side (x = 16.0); in LTR, end is right side
+    final double x = scaffoldGeometry.textDirection == TextDirection.rtl
+        ? 16.0
+        : scaffoldGeometry.scaffoldSize.width - fabWidth - 16.0;
+
+    double y = scaffoldGeometry.contentBottom - fabHeight - 16.0;
+    if (hasCartBar) {
+      y -= 125.0; // Float right above the cart checkout summary bar
+    }
+    return Offset(x, y);
   }
 }
