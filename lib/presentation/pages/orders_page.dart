@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../core/services/telegram_launcher.dart';
+
 import '../../data/models/order_model.dart';
 import '../../logic/orders/orders_cubit.dart';
 import '../../logic/orders/orders_state.dart';
@@ -186,14 +186,6 @@ class _OrdersPageState extends State<OrdersPage> with SingleTickerProviderStateM
             'عند شرائك أي اشتراك ستظهر أكواد التفعيل وتفاصيل المتابعة هنا تلقائياً.',
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-          ),
-        ),
-        const SizedBox(height: 24),
-        Center(
-          child: OutlinedButton.icon(
-            icon: const Icon(Icons.telegram, color: Color(0xFF229ED9)),
-            label: const Text('التواصل مع الدعم الفني (@sahm)'),
-            onPressed: () => TelegramLauncher.openBotChat(),
           ),
         ),
       ],

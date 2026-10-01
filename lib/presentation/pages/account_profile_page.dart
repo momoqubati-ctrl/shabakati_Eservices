@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../core/services/telegram_launcher.dart';
 import '../../logic/auth/auth_cubit.dart';
 import '../../logic/auth/auth_state.dart';
 import '../../logic/cart/cart_cubit.dart';
@@ -169,26 +168,7 @@ class _AccountProfilePageState extends State<AccountProfilePage> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
 
-                // قسم المساعدة والدعم
-                const Text('المساعدة والدعم', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 10),
-
-                Container(
-                  decoration: BoxDecoration(
-                    color: theme.cardColor,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: colorScheme.outlineVariant.withAlpha(100)),
-                  ),
-                  child: ListTile(
-                    leading: const Icon(Icons.support_agent_rounded, color: Color(0xFF229ED9)),
-                    title: const Text('الدعم الفني عبر تيليجرام (@sahm)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    subtitle: const Text('خدمة العملاء على مدار الساعة', style: TextStyle(fontSize: 11)),
-                    trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
-                    onTap: () => TelegramLauncher.openBotChat(),
-                  ),
-                ),
                 const SizedBox(height: 32),
 
                 // زر تسجيل الخروج

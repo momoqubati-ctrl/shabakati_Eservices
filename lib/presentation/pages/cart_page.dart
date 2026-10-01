@@ -262,7 +262,7 @@ class CartPage extends StatelessWidget {
                                       ? (isInstantFulfilled
                                           ? 'تم تنفيذ الطلب بنجاح لدى مزود الخدمة Digital Vault'
                                           : 'تم الشراء بنجاح لدى المزود Digital Vault وجارٍ التجهيز والتسليم')
-                                      : 'تم خصم المبلغ بنجاح عبر المحفظة وجارٍ متابعة الشراء مع الدعم الفني',
+                                      : 'تم خصم المبلغ بنجاح وجارٍ تنفيذ العملية',
                                   style: TextStyle(
                                     color: isVaultSuccess ? Colors.green.shade900 : Colors.amber.shade900,
                                     fontWeight: FontWeight.bold,

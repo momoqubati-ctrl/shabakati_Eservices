@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import '../../core/services/telegram_launcher.dart';
+
 import '../../data/models/order_model.dart';
 
 class OrderStatusCard extends StatelessWidget {
@@ -189,22 +189,6 @@ class OrderStatusCard extends StatelessWidget {
                 ),
               ),
             ],
-
-            const SizedBox(height: 12),
-
-            // زر المتابعة عبر بوت تيليجرام
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                icon: const Icon(Icons.support_agent_rounded, size: 18),
-                label: const Text('متابعة مع الدعم الفني عبر تيليجرام', style: TextStyle(fontSize: 12)),
-                onPressed: () => TelegramLauncher.openBotChat(startParam: order.externalOrderId),
-                style: OutlinedButton.styleFrom(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                ),
-              ),
-            ),
           ],
         ),
       ),

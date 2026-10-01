@@ -27,7 +27,6 @@ class CheckoutWarningDialog extends StatefulWidget {
 }
 
 class _CheckoutWarningDialogState extends State<CheckoutWarningDialog> {
-  late final TextEditingController _telegramController;
   late final TextEditingController _phoneController;
   String _selectedPaymentMethod = 'بطاقة بنكية / ميزة / فيزا';
   bool _acceptedTerms = true;
@@ -36,13 +35,11 @@ class _CheckoutWarningDialogState extends State<CheckoutWarningDialog> {
   @override
   void initState() {
     super.initState();
-    _telegramController = TextEditingController(text: widget.initialTelegramUser ?? '');
     _phoneController = TextEditingController(text: widget.initialPhone ?? '');
   }
 
   @override
   void dispose() {
-    _telegramController.dispose();
     _phoneController.dispose();
     super.dispose();
   }
@@ -112,7 +109,7 @@ class _CheckoutWarningDialogState extends State<CheckoutWarningDialog> {
                           ),
                           SizedBox(height: 4),
                           Text(
-                            'بعض الاشتراكات والخدمات الرقمية تتطلب معالجة وتفعيلاً قد يستغرق مدة تصل إلى 24 ساعة كحد أقصى بعد إتمام عملية الدفع. في حال كان المفتاح متاحاً فورياً سيتم تسليمه لك في الحال مباشرة داخل التطبيق وتيليجرام.',
+                            'بعض الاشتراكات والخدمات الرقمية تتطلب معالجة وتفعيلاً قد يستغرق مدة تصل إلى 24 ساعة كحد أقصى بعد إتمام عملية الدفع. في حال كان المفتاح متاحاً فورياً سيتم تسليمه لك في الحال مباشرة داخل التطبيق.',
                             style: TextStyle(fontSize: 12, height: 1.45, color: Color(0xFF78350F)),
                           ),
                         ],
@@ -159,19 +156,6 @@ class _CheckoutWarningDialogState extends State<CheckoutWarningDialog> {
                 ),
               ),
               const SizedBox(height: 16),
-
-              // حقل معرّف تيليجرام لاستلام التنبيهات
-              TextField(
-                controller: _telegramController,
-                decoration: InputDecoration(
-                  labelText: 'معرف تيليجرام (اختياري للإشعار والتسليم)',
-                  hintText: '@username',
-                  prefixIcon: const Icon(Icons.telegram, color: Color(0xFF229ED9)),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
-              ),
-              const SizedBox(height: 12),
 
               // حقل رقم الهاتف أو الواتساب
               TextField(
@@ -227,7 +211,7 @@ class _CheckoutWarningDialogState extends State<CheckoutWarningDialog> {
                           : () {
                               Navigator.pop(context);
                               widget.onPayWithBasGate!(
-                                _telegramController.text.trim(),
+                                widget.initialTelegramUser ?? '',
                                 _phoneController.text.trim(),
                               );
                             },
@@ -332,7 +316,7 @@ class _CheckoutWarningDialogState extends State<CheckoutWarningDialog> {
                       : () {
                           Navigator.pop(context);
                           widget.onConfirm(
-                            _telegramController.text.trim(),
+                            widget.initialTelegramUser ?? '',
                             _phoneController.text.trim(),
                             _selectedPaymentMethod,
                           );
