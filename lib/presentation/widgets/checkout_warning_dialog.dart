@@ -252,40 +252,20 @@ class _CheckoutWarningDialogState extends State<CheckoutWarningDialog> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Row(
-                                    children: [
-                                      const Text(
-                                        'الدفع المباشر بالمحافظ الإلكترونية',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: Colors.amber.shade400,
-                                          borderRadius: BorderRadius.circular(6),
-                                        ),
-                                        child: const Text(
-                                          'BasGate',
-                                          style: TextStyle(
-                                            color: Colors.black87,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 10,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
+                                  const Text(
+                                    'الدفع المباشر بالمحافظ الإلكترونية',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
                                   ),
-                                  const SizedBox(height: 3),
+                                  const SizedBox(height: 4),
                                   Text(
-                                    'الكريمي جوال، كاش، ون كاش، فلوسك، جوالي، بيس...',
+                                    'كاش، ون كاش، فلوسك، جوالي، بيس، وغيرها...',
                                     style: TextStyle(
                                       color: Colors.white.withAlpha(220),
-                                      fontSize: 11,
+                                      fontSize: 11.5,
                                     ),
                                   ),
                                 ],

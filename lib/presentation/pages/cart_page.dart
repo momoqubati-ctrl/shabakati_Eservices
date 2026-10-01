@@ -110,7 +110,7 @@ class CartPage extends StatelessWidget {
                       CircularProgressIndicator(),
                       SizedBox(height: 16),
                       Text(
-                        'جارٍ فتح بوابة الدفع الإلكترونية (BasGate)...',
+                        'جارٍ فتح بوابة الدفع بالمحافظ الإلكترونية...',
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                       ),
                     ],
@@ -262,7 +262,7 @@ class CartPage extends StatelessWidget {
                                       ? (isInstantFulfilled
                                           ? 'تم تنفيذ الطلب بنجاح لدى مزود الخدمة Digital Vault'
                                           : 'تم الشراء بنجاح لدى المزود Digital Vault وجارٍ التجهيز والتسليم')
-                                      : 'تم خصم المبلغ بنجاح عبر BasGate وجارٍ متابعة الشراء مع الدعم الفني',
+                                      : 'تم خصم المبلغ بنجاح عبر المحفظة وجارٍ متابعة الشراء مع الدعم الفني',
                                   style: TextStyle(
                                     color: isVaultSuccess ? Colors.green.shade900 : Colors.amber.shade900,
                                     fontWeight: FontWeight.bold,
@@ -347,8 +347,8 @@ class CartPage extends StatelessWidget {
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  const Text('بوابة الدفع:', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                                  const Text('BasGate (دفع مباشر)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                  const Text('طريقة الدفع:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                  const Text('المحافظ الإلكترونية', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                                 ],
                               ),
                               if (paymentResult.paymentId != null) ...[
