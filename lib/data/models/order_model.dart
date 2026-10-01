@@ -1,3 +1,4 @@
+import 'package:intl/intl.dart';
 class OrderModel {
   final int? id;
   final String externalOrderId;
@@ -31,6 +32,30 @@ class OrderModel {
 
   double get totalAmount => totalCents / 100.0;
   String get displayTotal => '\$${totalAmount.toStringAsFixed(2)} $currency';
+
+  /// احتساب السعر بالريال اليمني للطلب
+  double totalAmountYer({double exchangeRate = 535.0}) {
+    final costYer = (totalCents / 100.0) * exchangeRate;
+    final withMargin = costYer + 1000.0;
+    return (withMargin / 1000.0).ceil() * 1000.0;
+  }
+
+  String displayTotalYer({double exchangeRate = 535.0}) {
+    final yer = totalAmountYer(exchangeRate: exchangeRate);
+    final formatter = NumberFormat('#,###');
+    return '${formatter.format(yer)} ر.ي';
+  }
+
+  /// السعر المعادل بالدولار لسعر البيع للجمهور بالريال اليمني
+  double totalRetailUsd({double exchangeRate = 535.0}) {
+    final rate = (exchangeRate > 0) ? exchangeRate : 535.0;
+    return totalAmountYer(exchangeRate: rate) / rate;
+  }
+
+  String displayRetailUsd({double exchangeRate = 535.0}) {
+    final usd = totalRetailUsd(exchangeRate: exchangeRate);
+    return '\$${usd.toStringAsFixed(2)} USD';
+  }
 
   factory OrderModel.fromJson(Map<String, dynamic> json) {
     String? key;

@@ -21,7 +21,7 @@ class CartPage extends StatelessWidget {
       context: context,
       barrierDismissible: false,
       builder: (dialogCtx) => CheckoutWarningDialog(
-        totalAmount: cartState.totalAmount,
+        totalAmount: cartState.totalRetailUsd(),
         currency: 'USD',
         displayYer: cartState.displayTotalYer(),
         itemsCount: cartState.totalCount,
@@ -191,7 +191,7 @@ class CartPage extends StatelessWidget {
                                       ),
                                     ),
                                     Text(
-                                      item.product.displaySecondaryUsd,
+                                      item.displayTotalRetailUsd(),
                                       style: TextStyle(
                                         fontSize: 10,
                                         color: Colors.grey.shade500,
@@ -257,8 +257,8 @@ class CartPage extends StatelessWidget {
                                   ),
                                 ),
                                 Text(
-                                  state.displayTotal,
-                                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                  state.displayTotalRetailUsd(),
+                                  style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600, fontWeight: FontWeight.w600),
                                 ),
                               ],
                             ),

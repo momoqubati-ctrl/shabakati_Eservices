@@ -101,14 +101,23 @@ class OrderStatusCard extends StatelessWidget {
             ),
             const Divider(height: 24),
 
-            // السعر الإجمالي
+            // السعر الإجمالي بالريال اليمني والدولار
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text('المبلغ المدفوع:', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                Text(
-                  order.displayTotal,
-                  style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.primary, fontSize: 14),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      order.displayTotalYer(),
+                      style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.primary, fontSize: 14),
+                    ),
+                    Text(
+                      order.displayRetailUsd(),
+                      style: TextStyle(fontSize: 10.5, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                    ),
+                  ],
                 ),
               ],
             ),

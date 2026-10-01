@@ -104,7 +104,20 @@ class ProductModel {
     return '${formatter.format(yer)} ر.ي';
   }
 
-  String get displaySecondaryUsd => '\$${sellerPrice.amount.toStringAsFixed(2)} USD';
+  /// السعر المعادل بالدولار لسعر البيع النهائي بالريال اليمني للجمهور (مقابل السعر اليمني)
+  double getRetailPriceUsd({double exchangeRate = 535.0}) {
+    final yer = getFinalPriceYer(exchangeRate: exchangeRate);
+    final rate = (exchangeRate > 0) ? exchangeRate : 535.0;
+    return yer / rate;
+  }
+
+  /// عرض السعر المعادل بالدولار للجمهور بناءً على سعر البيع بالريال اليمني
+  String displayRetailPriceUsd({double exchangeRate = 535.0}) {
+    final usd = getRetailPriceUsd(exchangeRate: exchangeRate);
+    return '\$${usd.toStringAsFixed(2)} USD';
+  }
+
+  String get displaySecondaryUsd => displayRetailPriceUsd();
 
   String get category {
     final lower = name.toLowerCase();

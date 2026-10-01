@@ -161,11 +161,11 @@ class ProductCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      product.displaySecondaryUsd,
+                      product.displayRetailPriceUsd(exchangeRate: exchangeRate),
                       style: TextStyle(
-                        fontSize: 10,
-                        color: Colors.grey.shade500,
-                        fontWeight: FontWeight.w500,
+                        fontSize: 10.5,
+                        color: Colors.grey.shade600,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],

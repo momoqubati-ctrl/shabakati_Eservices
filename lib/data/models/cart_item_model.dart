@@ -24,6 +24,16 @@ class CartItemModel {
     return '${formatter.format(yer)} ر.ي';
   }
 
+  double totalRetailUsd({double exchangeRate = 535.0}) {
+    final rate = (exchangeRate > 0) ? exchangeRate : 535.0;
+    return totalAmountYer(exchangeRate: rate) / rate;
+  }
+
+  String displayTotalRetailUsd({double exchangeRate = 535.0}) {
+    final usd = totalRetailUsd(exchangeRate: exchangeRate);
+    return '\$${usd.toStringAsFixed(2)} USD';
+  }
+
   CartItemModel copyWith({
     ProductModel? product,
     int? quantity,
