@@ -38,7 +38,7 @@ export default async function handler(req, res) {
                  process.env.VITE_WHATSAPP_FROM || 
                  '967737241475';
 
-    const text = message || `مرحباً بك في بوابة شبكتي للخدمات الرقمية.\n\nرمز التحقق لتسجيل حسابك هو:\n* ${otp} *\n\nصالح لمدة 5 دقائق. لا تشارك هذا الرمز مع أي شخص.`;
+    const text = message || `مرحباً بك في بوابة شبكتي للخدمات الرقمية.\n\nرمز التحقق لتسجيل حسابك هو:\n${otp}\n\nصالح لمدة 5 دقائق. لا تشارك هذا الرمز مع أي شخص.`;
 
     const endpoint = 'https://whatsqubatibot-9x83.onrender.com/api/qr/rest/send_message';
 
