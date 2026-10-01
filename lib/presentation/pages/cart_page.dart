@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/services/basgate_payment_service.dart';
 import '../../core/services/secure_storage_service.dart';
@@ -138,11 +139,49 @@ class CartPage extends StatelessWidget {
 
           // 3. معالجة نتيجة الدفع
           if (paymentResult.isSuccess) {
-            // ✅ تم الدفع بنجاح لدى البنك: يتم إرسال وتسجيل الطلب رسمياً
+            // ✅ تم الدفع بنجاح لدى البنك: إظهار ديالوج "جاري التحقق من نجاح الدفع وتنفيذ العملية..."
             showDialog(
               context: context,
               barrierDismissible: false,
-              builder: (_) => const Center(child: CircularProgressIndicator()),
+              builder: (_) => Directionality(
+                textDirection: TextDirection.rtl,
+                child: Dialog(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 56,
+                          height: 56,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.primaryContainer.withAlpha(120),
+                            shape: BoxShape.circle,
+                          ),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 3.5,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        const Text(
+                          'جاري التحقق من نجاح الدفع وتنفيذ العملية...',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          'تم تأكيد عملية السداد بنجاح، جاري الآن شراء وتفعيل طلبك لدى مزود الخدمة (Digital Vault)...',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600, height: 1.5),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             );
 
             final submitResult = await ordersCubit.submitOrder(
@@ -152,56 +191,197 @@ class CartPage extends StatelessWidget {
             );
 
             if (!context.mounted) return;
-            Navigator.pop(context); // إغلاق مؤشر التسجيل
+            Navigator.pop(context); // إغلاق ديالوج جاري التحقق وتنفيذ العملية
 
             cartCubit.clearCart();
             ordersCubit.loadOrders();
+
+            final order = submitResult?.order;
+            final isVaultSuccess = order != null;
+            final bool isInstantFulfilled = order?.isReady == true || 
+                submitResult?.isInstantDelivery == true ||
+                (order?.deliveredKey != null && order!.deliveredKey!.isNotEmpty);
 
             showDialog(
               context: context,
               builder: (ctx) => Directionality(
                 textDirection: TextDirection.rtl,
                 child: AlertDialog(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
                   title: Row(
-                    children: const [
-                      Icon(Icons.check_circle_rounded, color: Colors.green, size: 28),
-                      SizedBox(width: 8),
-                      Text('تم الدفع واستلام الطلب'),
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: isInstantFulfilled ? Colors.green.shade50 : (isVaultSuccess ? Colors.blue.shade50 : Colors.amber.shade50),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          isInstantFulfilled ? Icons.check_circle_rounded : (isVaultSuccess ? Icons.verified_rounded : Icons.info_outline_rounded),
+                          color: isInstantFulfilled ? Colors.green.shade700 : (isVaultSuccess ? Colors.blue.shade700 : Colors.amber.shade800),
+                          size: 26,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          isInstantFulfilled ? 'تم تنفيذ الطلب بنجاح' : (isVaultSuccess ? 'تم تأكيد الشراء لدى المزود' : 'تم استلام الدفع'),
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                      ),
                     ],
                   ),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        submitResult?.message ?? 'تم خصم المبلغ بنجاح عبر بوابة BasGate وتأكيد طلبك.',
-                        style: const TextStyle(fontSize: 13.5, height: 1.4),
-                      ),
-                      const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.green.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.green.shade200),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'المبلغ المسدد: ${cartState.displayTotalYer()}',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                  content: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // شارة حالة الشراء والتنفيذ لدى مزود الخدمة Digital Vault
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: isVaultSuccess ? Colors.green.shade50 : Colors.amber.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isVaultSuccess ? Colors.green.shade300 : Colors.amber.shade300,
                             ),
-                            if (paymentResult.paymentId != null)
-                              Text(
-                                'رقم العملية البنكية: ${paymentResult.paymentId}',
-                                style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                isVaultSuccess ? Icons.cloud_done_rounded : Icons.pending_actions_rounded,
+                                color: isVaultSuccess ? Colors.green.shade800 : Colors.amber.shade900,
+                                size: 20,
                               ),
-                          ],
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  isVaultSuccess
+                                      ? (isInstantFulfilled
+                                          ? 'تم تنفيذ الطلب بنجاح لدى مزود الخدمة Digital Vault'
+                                          : 'تم الشراء بنجاح لدى المزود Digital Vault وجارٍ التجهيز والتسليم')
+                                      : 'تم خصم المبلغ بنجاح عبر BasGate وجارٍ متابعة الشراء مع الدعم الفني',
+                                  style: TextStyle(
+                                    color: isVaultSuccess ? Colors.green.shade900 : Colors.amber.shade900,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12.5,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 14),
+
+                        // في حال استلام مفتاح رقمي أو كود تفعيل فوري
+                        if (order?.deliveredKey != null && order!.deliveredKey!.isNotEmpty) ...[
+                          const Text(
+                            'كود التفعيل / المفتاح الرقمي:',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                          ),
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.grey.shade300),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: SelectableText(
+                                    order.deliveredKey!,
+                                    style: const TextStyle(
+                                      fontFamily: 'monospace',
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.copy_rounded, size: 18),
+                                  tooltip: 'نسخ الكود',
+                                  onPressed: () {
+                                    Clipboard.setData(ClipboardData(text: order.deliveredKey!));
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('تم نسخ كود التفعيل إلى الحافظة'),
+                                        duration: Duration(seconds: 2),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+
+                        // ملخص تفاصيل الدفع والطلب
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).cardColor,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey.shade200),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text('المبلغ المسدد:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                  Text(
+                                    cartState.displayTotalYer(),
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                  ),
+                                ],
+                              ),
+                              const Divider(height: 14),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text('بوابة الدفع:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                  const Text('BasGate (دفع مباشر)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                ],
+                              ),
+                              if (paymentResult.paymentId != null) ...[
+                                const SizedBox(height: 6),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Text('رقم العملية البنكية:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                    Text(
+                                      paymentResult.paymentId!,
+                                      style: TextStyle(fontSize: 11, color: Colors.grey.shade700, fontFamily: 'monospace'),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                              if (order?.sellerOrderId != null) ...[
+                                const SizedBox(height: 6),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Text('رقم طلب المزود:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                    Text(
+                                      '#${order!.sellerOrderId}',
+                                      style: TextStyle(fontSize: 11, color: Colors.grey.shade700, fontFamily: 'monospace'),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   actions: [
                     FilledButton(
