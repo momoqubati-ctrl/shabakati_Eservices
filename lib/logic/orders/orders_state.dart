@@ -17,11 +17,15 @@ class OrderSubmitSuccess extends OrdersState {
   final OrderModel order;
   final String message;
   final bool isInstantDelivery;
+  final bool isVaultSuccess;
+  final String? errorMessage;
 
   OrderSubmitSuccess({
     required this.order,
     required this.message,
     required this.isInstantDelivery,
+    this.isVaultSuccess = true,
+    this.errorMessage,
   });
 }
 

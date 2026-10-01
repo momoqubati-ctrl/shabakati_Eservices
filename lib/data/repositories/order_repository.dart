@@ -6,7 +6,7 @@ import '../models/cart_item_model.dart';
 import '../models/order_model.dart';
 
 abstract class IOrderRepository {
-  Future<OrderModel> submitOrder({
+  Future<OrderSubmitResult> submitOrder({
     required List<CartItemModel> items,
     required String deviceId,
     String? telegramUser,
@@ -30,7 +30,7 @@ class OrderRepository implements IOrderRepository {
   });
 
   @override
-  Future<OrderModel> submitOrder({
+  Future<OrderSubmitResult> submitOrder({
     required List<CartItemModel> items,
     required String deviceId,
     String? telegramUser,
@@ -43,6 +43,17 @@ class OrderRepository implements IOrderRepository {
       'quantity': e.quantity,
     }).toList();
 
+    int totalCents = items.fold<int>(0, (sum, item) => sum + (item.product.sellerPrice.amountCents * item.quantity));
+    String currency = items.isNotEmpty ? items.first.product.sellerPrice.currency : 'USD';
+
+    int? sellerOrderId;
+    String fulfillmentStatus = 'processing';
+    String orderStatus = 'paid';
+    String? deliveredKey;
+    String? deliveredUrl;
+    bool isVaultSuccess = false;
+    String? providerError;
+
     try {
       // 1. إرسال الطلب لـ Digital Vault Seller API
       final response = await dioClient.dio.post(
@@ -53,44 +64,55 @@ class OrderRepository implements IOrderRepository {
         },
       );
 
-      if (response.statusCode != 200 && response.statusCode != 201) {
-        throw Exception(response.data['error'] ?? 'فشل في إنشاء الطلب لدى المزود');
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = response.data['data'] as Map<String, dynamic>;
+        sellerOrderId = data['id'];
+        fulfillmentStatus = data['fulfillment_status'] ?? 'processing';
+        orderStatus = data['status'] ?? 'paid';
+        if (data['total'] is Map) {
+          totalCents = data['total']['amount_cents'] ?? totalCents;
+          currency = data['total']['currency'] ?? currency;
+        }
+
+        // 2. إذا كان التسليم فوري ومكتمل (ready)، نقوم باستهلاك المفتاح الرقمي فوراً
+        if (fulfillmentStatus == 'ready' && sellerOrderId != null) {
+          final assets = await _consumeDelivery(sellerOrderId);
+          deliveredKey = assets['key'];
+          deliveredUrl = assets['url'];
+          orderStatus = 'completed';
+        }
+        isVaultSuccess = true;
+      } else {
+        providerError = response.data?['error']?.toString() ?? 'تعذر قبول الطلب من المزود (${response.statusCode})';
       }
-
-      final data = response.data['data'] as Map<String, dynamic>;
-      int sellerOrderId = data['id'];
-      String fulfillmentStatus = data['fulfillment_status'] ?? 'processing';
-      String orderStatus = data['status'] ?? 'paid';
-      int totalCents = (data['total'] is Map) ? (data['total']['amount_cents'] ?? 0) : 0;
-      String currency = (data['total'] is Map) ? (data['total']['currency'] ?? 'USD') : 'USD';
-
-      String? deliveredKey;
-      String? deliveredUrl;
-
-      // 2. إذا كان التسليم فوري ومكتمل (ready)، نقوم باستهلاك المفتاح الرقمي فوراً
-      if (fulfillmentStatus == 'ready') {
-        final assets = await _consumeDelivery(sellerOrderId);
-        deliveredKey = assets['key'];
-        deliveredUrl = assets['url'];
-        fulfillmentStatus = 'ready';
-        orderStatus = 'completed';
+    } on DioException catch (e) {
+      if (e.response != null && e.response?.data is Map && e.response?.data['error'] != null) {
+        providerError = e.response!.data['error'].toString();
+      } else if (e.message != null && e.message!.isNotEmpty) {
+        providerError = e.message;
+      } else {
+        providerError = 'تعذر الاتصال بمزود الخدمة (Digital Vault)';
       }
+    } catch (e) {
+      providerError = e.toString().replaceAll('Exception: ', '');
+    }
 
-      final createdOrder = OrderModel(
-        externalOrderId: externalOrderId,
-        sellerOrderId: sellerOrderId,
-        status: orderStatus,
-        fulfillmentStatus: fulfillmentStatus,
-        totalCents: totalCents,
-        currency: currency,
-        deliveredKey: deliveredKey,
-        deliveredUrl: deliveredUrl,
-        createdAt: DateTime.now(),
-        telegramUser: telegramUser,
-        contactPhone: contactPhone,
-      );
+    // 3. إنشاء كائن الطلب دائماً وحفظه في Supabase لضمان بقاء العملية مسجلة ومعلقة حتى معالجة الدعم الفني
+    final createdOrder = OrderModel(
+      externalOrderId: externalOrderId,
+      sellerOrderId: sellerOrderId,
+      status: orderStatus,
+      fulfillmentStatus: fulfillmentStatus,
+      totalCents: totalCents,
+      currency: currency,
+      deliveredKey: deliveredKey,
+      deliveredUrl: deliveredUrl,
+      createdAt: DateTime.now(),
+      telegramUser: telegramUser,
+      contactPhone: contactPhone,
+    );
 
-      // 3. حفظ نسخة من الطلب في قاعدة بيانات Supabase للمتابعة بدون تسجيل دخول
+    try {
       await _saveOrderToSupabase(
         order: createdOrder,
         items: items,
@@ -99,14 +121,22 @@ class OrderRepository implements IOrderRepository {
         contactPhone: contactPhone,
         contactEmail: contactEmail,
       );
+    } catch (_) {}
 
-      return createdOrder;
-    } on DioException catch (e) {
-      if (e.response != null && e.response?.data is Map) {
-        throw Exception(e.response?.data['error'] ?? 'خطأ أثناء معالجة الطلب');
-      }
-      throw Exception('تعذر استكمال الطلب، تأكد من الاتصال بالإنترنت');
-    }
+    final bool isInstant = deliveredKey != null && deliveredKey.isNotEmpty;
+    final message = isVaultSuccess
+        ? (isInstant
+            ? 'تم تفعيل واستلام المفتاح الرقمي بنجاح لدى المزود!'
+            : 'تم الشراء بنجاح لدى مزود الخدمة وطلبك قيد التجهيز والتسليم.')
+        : 'الطلب مسجل ومعلق قيد المعالجة من الدعم الفني: $providerError';
+
+    return OrderSubmitResult(
+      isSuccess: isVaultSuccess,
+      order: createdOrder,
+      errorMessage: providerError,
+      isInstantDelivery: isInstant,
+      message: message,
+    );
   }
 
   Future<Map<String, String?>> _consumeDelivery(int sellerOrderId) async {

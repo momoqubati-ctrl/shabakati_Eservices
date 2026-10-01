@@ -39,7 +39,7 @@ class OrdersCubit extends Cubit<OrdersState> {
     }
   }
 
-  Future<OrderSubmitSuccess?> submitOrder({
+  Future<OrderSubmitResult> submitOrder({
     required List<CartItemModel> items,
     String? telegramUser,
     String? contactPhone,
@@ -52,7 +52,7 @@ class OrdersCubit extends Cubit<OrdersState> {
         await secureStorageService.saveTelegramUser(telegramUser);
       }
 
-      final order = await orderRepository.submitOrder(
+      final result = await orderRepository.submitOrder(
         items: items,
         deviceId: deviceId,
         telegramUser: telegramUser,
@@ -60,22 +60,34 @@ class OrdersCubit extends Cubit<OrdersState> {
         contactEmail: contactEmail,
       );
 
-      final isInstant = order.isReady && order.deliveredKey != null;
-      final message = isInstant
-          ? 'تم تفعيل واستلام المفتاح الرقمي بنجاح!'
-          : 'تم تأكيد الدفع بنجاح. طلبك قيد التنفيذ وسيتم تسليمه خلال مدة أقصاها 24 ساعة.';
-
       final successState = OrderSubmitSuccess(
-        order: order,
-        message: message,
-        isInstantDelivery: isInstant,
+        order: result.order,
+        message: result.message,
+        isInstantDelivery: result.isInstantDelivery,
+        isVaultSuccess: result.isSuccess,
+        errorMessage: result.errorMessage,
       );
 
       emit(successState);
-      return successState;
+      return result;
     } catch (e) {
-      emit(OrderSubmitError(e.toString().replaceAll('Exception: ', '')));
-      return null;
+      final errorMsg = e.toString().replaceAll('Exception: ', '');
+      emit(OrderSubmitError(errorMsg));
+      final fallbackOrder = OrderModel(
+        externalOrderId: 'ord_${DateTime.now().millisecondsSinceEpoch}',
+        status: 'paid',
+        fulfillmentStatus: 'processing',
+        totalCents: 0,
+        currency: 'USD',
+        createdAt: DateTime.now(),
+        contactPhone: contactPhone,
+      );
+      return OrderSubmitResult(
+        isSuccess: false,
+        order: fallbackOrder,
+        errorMessage: errorMsg,
+        message: errorMsg,
+      );
     }
   }
 

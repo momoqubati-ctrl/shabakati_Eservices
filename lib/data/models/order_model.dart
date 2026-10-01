@@ -116,3 +116,20 @@ class OrderModel {
     };
   }
 }
+
+class OrderSubmitResult {
+  final bool isSuccess;
+  final OrderModel order;
+  final String? errorMessage;
+  final bool isInstantDelivery;
+  final String message;
+
+  OrderSubmitResult({
+    required this.isSuccess,
+    required this.order,
+    this.errorMessage,
+    this.isInstantDelivery = false,
+    required this.message,
+  });
+}
+

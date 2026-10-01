@@ -23,6 +23,26 @@ class CartPage extends StatelessWidget {
     return trimmed.startsWith('http://') || trimmed.startsWith('https://');
   }
 
+  String _friendlyProviderError(String? rawError) {
+    if (rawError == null || rawError.isEmpty) {
+      return 'تعذر إتمام التفعيل التلقائي لدى مزود الخدمة (Digital Vault) في الوقت الحالي.';
+    }
+    final lower = rawError.toLowerCase();
+    if (lower.contains('insufficient') || lower.contains('balance') || lower.contains('funds')) {
+      return 'رصيد محفظة التفعيل التلقائي لدى المزود قيد التغذية من الإدارة.';
+    }
+    if (lower.contains('out_of_stock') || lower.contains('stock') || lower.contains('inventory')) {
+      return 'الكمية غير متوفرة حالياً في مخزون المزود وجارٍ شحنها.';
+    }
+    if (lower.contains('timeout') || lower.contains('network') || lower.contains('connection')) {
+      return 'تعذر الاتصال بخوادم المزود الرقمي مؤقتاً.';
+    }
+    if (lower.contains('unauthorized') || lower.contains('forbidden') || lower.contains('signature')) {
+      return 'خطأ في مصادقة ترويسات مزود الخدمة.';
+    }
+    return rawError;
+  }
+
   Future<bool> _showLoginRequiredDialog(BuildContext context) async {
     final shouldLogin = await showDialog<bool>(
       context: context,
@@ -204,13 +224,14 @@ class CartPage extends StatelessWidget {
             cartCubit.clearCart();
             ordersCubit.loadOrders();
 
-            final order = submitResult?.order;
-            final isVaultSuccess = order != null;
-            final bool isInstantFulfilled = order?.isReady == true || 
-                submitResult?.isInstantDelivery == true ||
-                (order?.deliveredKey != null && order!.deliveredKey!.isNotEmpty);
+            final order = submitResult.order;
+            final isVaultSuccess = submitResult.isSuccess;
+            final bool isInstantFulfilled = order.isReady || 
+                submitResult.isInstantDelivery ||
+                (order.deliveredKey != null && order.deliveredKey!.isNotEmpty);
 
-            showDialog(
+            if (isVaultSuccess) {
+              showDialog(
               context: context,
               builder: (ctx) => Directionality(
                 textDirection: TextDirection.rtl,
@@ -285,7 +306,7 @@ class CartPage extends StatelessWidget {
                         const SizedBox(height: 14),
 
                         // في حال استلام مفتاح رقمي أو كود تفعيل فوري
-                        if (order?.deliveredKey != null && order!.deliveredKey!.isNotEmpty) ...[
+                        if (order.deliveredKey != null && order.deliveredKey!.isNotEmpty) ...[
                           const Text(
                             'كود التفعيل / المفتاح الرقمي:',
                             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
@@ -415,14 +436,14 @@ class CartPage extends StatelessWidget {
                                   ],
                                 ),
                               ],
-                              if (order?.sellerOrderId != null) ...[
+                              if (order.sellerOrderId != null) ...[
                                 const SizedBox(height: 6),
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
                                     const Text('رقم طلب المزود:', style: TextStyle(fontSize: 12, color: Colors.grey)),
                                     Text(
-                                      '#${order!.sellerOrderId}',
+                                      '#${order.sellerOrderId}',
                                       style: TextStyle(fontSize: 11, color: Colors.grey.shade700, fontFamily: 'monospace'),
                                     ),
                                   ],
@@ -435,18 +456,18 @@ class CartPage extends StatelessWidget {
                     ),
                   ),
                   actions: [
-                    if (_isUrl(order?.deliveredKey))
+                    if (_isUrl(order.deliveredKey))
                       OutlinedButton.icon(
                         icon: const Icon(Icons.open_in_browser_rounded, size: 16),
                         label: const Text('فتح في المتصفح'),
                         onPressed: () async {
-                          final uri = Uri.tryParse(order!.deliveredKey!.trim());
+                          final uri = Uri.tryParse(order.deliveredKey!.trim());
                           if (uri != null) {
                             await launchUrl(uri, mode: LaunchMode.externalApplication);
                           }
                         },
                       ),
-                    if (order?.deliveredKey != null && order!.deliveredKey!.isNotEmpty)
+                    if (order.deliveredKey != null && order.deliveredKey!.isNotEmpty)
                       FilledButton.icon(
                         icon: const Icon(Icons.chat_rounded, size: 16),
                         label: const Text('إرسال عبر واتساب'),
@@ -476,7 +497,180 @@ class CartPage extends StatelessWidget {
                 ),
               ),
             );
-          } else if (paymentResult.isCancelled) {
+          } else {
+            // ⚠️ 2. ديالوج التنبيه والتعثر لدى المزود: تم الدفع والطلب معلق قيد معالجة الدعم الفني
+            final friendlyReason = _friendlyProviderError(submitResult.errorMessage);
+
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (ctx) => Directionality(
+                textDirection: TextDirection.rtl,
+                child: AlertDialog(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+                  title: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF3C7),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.pending_actions_rounded,
+                          color: Color(0xFFB45309),
+                          size: 26,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          'الطلب قيد المتابعة مع الدعم الفني',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                      ),
+                    ],
+                  ),
+                  content: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFFBEB),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFF59E0B)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: const [
+                                  Icon(Icons.info_outline_rounded, color: Color(0xFFB45309), size: 18),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'تم استلام الدفع والطلب معلق',
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF92400E)),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'تم خصم المبلغ بنجاح عبر المحفظة، ولكن تعذر التفعيل الفوري لدى مزود الخدمة (Digital Vault) بسبب:\n• $friendlyReason\n\nطلبك محفوظ ومعلق حالياً في قائمة طلباتك، وسيقوم فريق الدعم الفني بمعالجته وتفعيله لك يدوياً في أقرب وقت.',
+                                style: const TextStyle(fontSize: 12, height: 1.45, color: Color(0xFF78350F)),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).cardColor,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey.shade200),
+                          ),
+                          child: Column(
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text('المبلغ المسدد:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                  Text(
+                                    cartState.displayTotalYer(),
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                  ),
+                                ],
+                              ),
+                              const Divider(height: 14),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: const [
+                                  Text('طريقة الدفع:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                  Text('المحافظ الإلكترونية', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                ],
+                              ),
+                              if (paymentResult.paymentId != null) ...[
+                                const SizedBox(height: 6),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Text('رقم العملية البنكية:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                    Text(
+                                      paymentResult.paymentId!,
+                                      style: TextStyle(fontSize: 11, color: Colors.grey.shade700, fontFamily: 'monospace'),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                              const SizedBox(height: 6),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text('رقم الطلب:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                  Text(
+                                    '#${order.externalOrderId.replaceAll('ord_', '')}',
+                                    style: TextStyle(fontSize: 11, color: Colors.grey.shade700, fontFamily: 'monospace'),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: const [
+                                  Text('حالة الطلب:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                  Text(
+                                    'معلق (قيد المتابعة مع الدعم الفني)',
+                                    style: TextStyle(fontSize: 11.5, color: Color(0xFFB45309), fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  actions: [
+                    FilledButton.icon(
+                      icon: const Icon(Icons.chat_rounded, size: 17),
+                      label: const Text('متابعة مع الدعم الفني عبر واتساب'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF25D366),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: () {
+                        final supportMsg = '''
+مرحباً الدعم الفني لشبكتي،
+لقد قمت بسداد طلبي بنجاح، والطلب معلق لدى مزود الخدمة:
+• رقم الطلب: #${order.externalOrderId.replaceAll('ord_', '')}
+• رقم العملية البنكية: ${paymentResult.paymentId ?? 'غير متوفر'}
+• المبلغ: ${cartState.displayTotalYer()}
+• سبب التنبيه: $friendlyReason
+أرجو معالجة وتفعيل الطلب. شكراً لكم.
+'''.trim();
+                        WhatsAppLauncher.openSupportChat(message: supportMsg);
+                      },
+                    ),
+                    OutlinedButton(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        onNavigateToOrders();
+                      },
+                      child: const Text('عرض طلباتي واشتراكاتي'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+        } else if (paymentResult.isCancelled) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('⚠️ تم إلغاء عملية الدفع. لم يتم خصم أي مبلغ من حسابك.'),
@@ -511,7 +705,7 @@ class CartPage extends StatelessWidget {
           if (!context.mounted) return;
           Navigator.pop(context); // إغلاق مؤشر التحميل
 
-          if (result != null) {
+          if (result.isSuccess) {
             cartCubit.clearCart();
             ordersCubit.loadOrders();
 
@@ -546,8 +740,8 @@ class CartPage extends StatelessWidget {
             );
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('فشل في استكمال الطلب، يرجى المحاولة لاحقاً'),
+              SnackBar(
+                content: Text('فشل في استكمال الطلب: ${result.errorMessage ?? "يرجى المحاولة لاحقاً"}'),
                 backgroundColor: Colors.red,
               ),
             );
