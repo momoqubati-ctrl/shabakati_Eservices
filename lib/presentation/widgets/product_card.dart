@@ -35,7 +35,6 @@ class ProductCard extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isAvail = product.isAvailable;
-    final stockQty = product.stockQuantity;
 
     return Card(
       elevation: 0,
@@ -104,13 +103,13 @@ class ProductCard extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        isAvail ? Icons.inventory_2_rounded : Icons.cancel_outlined,
+                        isAvail ? Icons.check_circle_outline_rounded : Icons.cancel_outlined,
                         size: 11,
                         color: isAvail ? Colors.green.shade800 : Colors.red.shade800,
                       ),
                       const SizedBox(width: 3),
                       Text(
-                        isAvail ? 'متوفر: $stockQty' : 'نفذت الكمية',
+                        product.stockStatusText,
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,

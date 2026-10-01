@@ -10,7 +10,7 @@ class ProductModel {
   final PriceModel sellerBasePrice;
   final PriceModel lineTotal;
   final double? customPriceYer;
-  final int stockQuantity;
+  final int? stockQuantity;
   final String? iconUrl;
 
   ProductModel({
@@ -23,7 +23,7 @@ class ProductModel {
     required this.sellerBasePrice,
     required this.lineTotal,
     this.customPriceYer,
-    this.stockQuantity = 99,
+    this.stockQuantity,
     this.iconUrl,
   });
 
@@ -44,7 +44,7 @@ class ProductModel {
       sellerBasePrice: PriceModel.fromJson(json['seller_base_price'] ?? {}),
       lineTotal: PriceModel.fromJson(json['line_total'] ?? {}),
       customPriceYer: customPriceYer ?? (json['custom_price_yer'] != null ? (json['custom_price_yer'] as num).toDouble() : null),
-      stockQuantity: stockQuantity ?? (json['stock_quantity'] as int? ?? 99),
+      stockQuantity: stockQuantity ?? (json['stock_quantity'] as int?),
       iconUrl: effectiveIconUrl,
     );
   }
@@ -69,7 +69,21 @@ class ProductModel {
     );
   }
 
-  bool get isAvailable => availability == 'available' && stockQuantity > 0;
+  bool get isAvailable {
+    if (availability != 'available') return false;
+    if (stockQuantity != null && stockQuantity! <= 0) return false;
+    return true;
+  }
+
+  String get stockStatusText {
+    if (!isAvailable) {
+      return 'نفذت الكمية حاول لاحقاً';
+    }
+    if (stockQuantity != null && stockQuantity! > 0) {
+      return 'متوفر: $stockQuantity قطعة';
+    }
+    return 'متوفر';
+  }
 
   // احتساب السعر بالريال اليمني مع إضافة هامش 1000 ريال والتقريب لأعلى إلى أقرب ألف
   double getFinalPriceYer({double exchangeRate = 535.0}) {

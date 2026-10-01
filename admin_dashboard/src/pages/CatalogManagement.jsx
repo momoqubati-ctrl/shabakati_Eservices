@@ -83,7 +83,7 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
         productSettings.forEach((ps) => {
           pricingMap[ps.product_id] = {
             customPriceYer: ps.custom_price_yer || '',
-            stockQuantity: ps.stock_quantity ?? 99,
+            stockQuantity: ps.stock_quantity !== null && ps.stock_quantity !== undefined ? ps.stock_quantity : '',
             isActive: ps.is_active ?? true,
             iconUrl: ps.icon_url || '',
           };
@@ -152,6 +152,11 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
     const rawVal = custom.customPriceYer;
     const hasCustomVal = rawVal !== undefined && rawVal !== null && rawVal !== '' && !isNaN(Number(rawVal)) && Number(rawVal) > 0;
     
+    // هل أدخل المستخدم كمية يدوية محددة؟
+    const rawStock = custom.stockQuantity;
+    const hasCustomStock = rawStock !== undefined && rawStock !== null && rawStock !== '' && !isNaN(Number(rawStock));
+    const stockToSave = hasCustomStock ? Number(rawStock) : null;
+
     // إذا كان مخصصاً نحفظ الرقم، وإلا null لكي يبقى محتسباً آلياً في التطبيق
     const priceYerToSave = hasCustomVal ? Number(rawVal) : null;
     const effectiveIconUrl = custom.iconUrl || getDefaultIcon(product.sku, product.name);
@@ -165,7 +170,7 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
           sku: product.sku,
           custom_price_yer: priceYerToSave,
           custom_price_usd: priceYerToSave ? (priceYerToSave / exchangeRate).toFixed(2) : null,
-          stock_quantity: custom.stockQuantity ?? 99,
+          stock_quantity: stockToSave,
           icon_url: effectiveIconUrl,
           is_active: custom.isActive ?? true,
           updated_at: new Date().toISOString()
@@ -179,6 +184,7 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
         [product.id]: {
           ...prev[product.id],
           customPriceYer: priceYerToSave !== null ? priceYerToSave : '',
+          stockQuantity: stockToSave !== null ? stockToSave : '',
           iconUrl: effectiveIconUrl,
           saved: true
         }
@@ -288,7 +294,9 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
 
           const currentIconUrl = custom.iconUrl || getDefaultIcon(product.sku, product.name);
 
-          const stockQty = custom.stockQuantity ?? 99;
+          const rawStock = custom.stockQuantity;
+          const hasCustomStock = rawStock !== undefined && rawStock !== null && rawStock !== '' && !isNaN(Number(rawStock));
+          const stockQty = hasCustomStock ? Number(rawStock) : null;
           const isSaved = custom.saved;
 
           return (
@@ -303,15 +311,20 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
                     ID #{product.id}
                   </span>
                   <div className="flex items-center gap-2">
-                    {/* الكمية المتاحة من المزود */}
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 flex items-center gap-1">
-                      <Package className="w-3 h-3" />
-                      <span>الكمية: {isAvail ? `${stockQty} متوفر` : 'نفذت'}</span>
-                    </span>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                      isAvail ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                    {/* الكمية وحالة التوفر */}
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 ${
+                      !isAvail 
+                        ? 'bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-900/60' 
+                        : (hasCustomStock 
+                            ? 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900/60' 
+                            : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900/60')
                     }`}>
-                      {isAvail ? 'جاهز للتسليم' : 'غير متوفر'}
+                      <Package className="w-3 h-3" />
+                      <span>
+                        {!isAvail 
+                          ? 'نفذت الكمية حاول لاحقاً' 
+                          : (hasCustomStock ? `الكمية: ${stockQty} قطعة` : 'متوفر')}
+                      </span>
                     </span>
                   </div>
                 </div>
@@ -466,12 +479,14 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
 
                 <div className="flex items-center gap-2">
                   <div className="flex-1">
-                    <label className="block text-[10px] text-slate-400 mb-0.5">الكمية المتاحة:</label>
+                    <label className="block text-[10px] text-slate-400 mb-0.5">
+                      الكمية المتاحة (فارغ = متوفر):
+                    </label>
                     <input
                       type="number"
-                      value={stockQty}
+                      value={custom.stockQuantity !== undefined ? custom.stockQuantity : ''}
                       onChange={(e) => {
-                        const val = Number(e.target.value);
+                        const val = e.target.value;
                         setCustomPricing(prev => ({
                           ...prev,
                           [product.id]: {
@@ -480,7 +495,8 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
                           }
                         }));
                       }}
-                      className="w-full px-2.5 py-1.5 text-xs font-bold rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:outline-none"
+                      placeholder="متوفر (غير محدد)"
+                      className="w-full px-2.5 py-1.5 text-xs font-bold rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:outline-none placeholder:text-slate-400 placeholder:font-normal"
                     />
                   </div>
 
