@@ -51,11 +51,11 @@ class ApiConfig {
   // WhatsApp Gateway Configuration (WhatsQubatiBot)
   static const String whatsappToken = String.fromEnvironment(
     'WHATSAPP_TOKEN',
-    defaultValue: 'your_api_token_here',
+    defaultValue: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiI5OGQ0MjI1ZTNhNzc4NjE4ZDdkZDcyNGFlOTI4M2ZiNiIsInJvbGUiOiJ1c2VyIiwiaWF0IjoxNzkwNTM5NTMzfQ.LBj3W0Kq2gIaaMIPwj8V-_sueQhesA812qj4Eyksv_s',
   );
 
   static const String whatsappFrom = String.fromEnvironment(
     'WHATSAPP_FROM',
-    defaultValue: '',
+    defaultValue: '967737241475',
   );
 }
