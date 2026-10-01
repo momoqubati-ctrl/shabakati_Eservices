@@ -150,6 +150,15 @@ class _LoginPageState extends State<LoginPage> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
+        appBar: Navigator.canPop(context)
+            ? AppBar(
+                title: const Text('تسجيل الدخول', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                leading: IconButton(
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              )
+            : null,
         body: BlocConsumer<AuthCubit, AuthState>(
           listener: (context, state) async {
             if (state is AuthSuccess) {
@@ -159,7 +168,8 @@ class _LoginPageState extends State<LoginPage> {
               if (!context.mounted) return;
               if (widget.onLoginSuccess != null) {
                 widget.onLoginSuccess!();
-              } else if (Navigator.canPop(context)) {
+              }
+              if (Navigator.canPop(context)) {
                 Navigator.pop(context, true);
               }
             } else if (state is AuthError) {

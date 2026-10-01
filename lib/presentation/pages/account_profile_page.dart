@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/services/telegram_launcher.dart';
 import '../../logic/auth/auth_cubit.dart';
 import '../../logic/auth/auth_state.dart';
+import '../../logic/cart/cart_cubit.dart';
 import 'auth/login_page.dart';
 
 class AccountProfilePage extends StatefulWidget {
@@ -201,6 +202,9 @@ class _AccountProfilePageState extends State<AccountProfilePage> {
                   ),
                   onPressed: () async {
                     await cubit.logout();
+                    if (context.mounted) {
+                      context.read<CartCubit>().clearCart();
+                    }
                     setState(() {});
                   },
                 ),

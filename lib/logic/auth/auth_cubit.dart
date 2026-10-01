@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/services/auth_biometric_service.dart';
 import '../../core/services/otp_service.dart';
+import '../../core/services/secure_storage_service.dart';
 import '../../data/models/user_account_model.dart';
 import '../../data/repositories/auth_repository.dart';
 import 'auth_state.dart';
@@ -12,6 +13,7 @@ class AuthCubit extends Cubit<AuthState> {
   final IAuthRepository authRepository;
   final AuthBiometricService biometricService;
   final OtpService otpService;
+  final SecureStorageService secureStorageService;
 
   UserAccountModel? currentUser;
 
@@ -19,7 +21,25 @@ class AuthCubit extends Cubit<AuthState> {
     required this.authRepository,
     required this.biometricService,
     required this.otpService,
-  }) : super(AuthInitial());
+    SecureStorageService? secureStorageService,
+  })  : secureStorageService = secureStorageService ?? SecureStorageService(),
+        super(AuthInitial());
+
+  /// هل المستخدم مسجل دخوله حالياً بحساب نشط وموثق؟
+  bool get isAuthenticated => currentUser != null && state is AuthSuccess;
+
+  /// استعادة جلسة المستخدم المحفوظة عند فتح التطبيق
+  Future<void> restoreSavedSession() async {
+    try {
+      final savedUser = await secureStorageService.getActiveUser();
+      if (savedUser != null) {
+        currentUser = savedUser;
+        emit(AuthSuccess(user: savedUser, isFirstLogin: false));
+      }
+    } catch (e) {
+      debugPrint('Error restoring saved session: $e');
+    }
+  }
 
   String _hashPin(String pin) {
     final bytes = utf8.encode(pin.trim());
@@ -49,6 +69,7 @@ class AuthCubit extends Cubit<AuthState> {
       );
 
       currentUser = user;
+      await secureStorageService.saveActiveUser(user);
 
       // فحص هل هذه أول مرة يدخل فيها بدون تفعيل البصمة
       final hasBiometric = await biometricService.isBiometricEnabled();
@@ -96,6 +117,7 @@ class AuthCubit extends Cubit<AuthState> {
       );
 
       currentUser = user;
+      await secureStorageService.saveActiveUser(user);
       emit(AuthSuccess(user: user, isFirstLogin: false));
     } catch (e) {
       emit(AuthError(e.toString().replaceAll('Exception: ', '')));
@@ -187,6 +209,7 @@ class AuthCubit extends Cubit<AuthState> {
 
       if (isValid) {
         currentUser = user;
+        await secureStorageService.saveActiveUser(user);
         final canBiometric = await biometricService.isBiometricAvailable();
         emit(AuthSuccess(user: user, isFirstLogin: canBiometric));
         return true;
@@ -204,6 +227,7 @@ class AuthCubit extends Cubit<AuthState> {
 
   /// تسجيل الخروج
   Future<void> logout() async {
+    await secureStorageService.clearActiveUser();
     currentUser = null;
     emit(AuthInitial());
   }

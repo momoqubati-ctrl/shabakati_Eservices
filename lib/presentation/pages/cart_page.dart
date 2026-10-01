@@ -1,24 +1,82 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../core/services/auth_biometric_service.dart';
 import '../../core/services/basgate_payment_service.dart';
 import '../../core/services/secure_storage_service.dart';
+import '../../logic/auth/auth_cubit.dart';
 import '../../logic/cart/cart_cubit.dart';
 import '../../logic/cart/cart_state.dart';
 import '../../logic/orders/orders_cubit.dart';
 import '../widgets/checkout_warning_dialog.dart';
+import 'auth/login_page.dart';
 
 class CartPage extends StatelessWidget {
   final VoidCallback onNavigateToOrders;
 
   const CartPage({super.key, required this.onNavigateToOrders});
 
+  Future<bool> _showLoginRequiredDialog(BuildContext context) async {
+    final shouldLogin = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          icon: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.orange.shade50,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.lock_person_rounded, size: 40, color: Colors.orange.shade800),
+          ),
+          title: const Text(
+            'تسجيل الدخول مطلوب',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+            textAlign: TextAlign.center,
+          ),
+          content: const Text(
+            'لا يمكنك متابعة الشراء أو الدفع إلا إذا كنت عميلاً مسجلاً وقمت بتسجيل الدخول إلى حسابك.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13.5, height: 1.5),
+          ),
+          actionsAlignment: MainAxisAlignment.spaceEvenly,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text('إلغاء', style: TextStyle(color: Colors.grey.shade600)),
+            ),
+            FilledButton.icon(
+              icon: const Icon(Icons.login_rounded, size: 18),
+              label: const Text('تسجيل الدخول الآن'),
+              onPressed: () => Navigator.pop(ctx, true),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (shouldLogin == true && context.mounted) {
+      final loggedIn = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginPage()),
+      );
+      return loggedIn == true && context.mounted && context.read<AuthCubit>().isAuthenticated;
+    }
+    return false;
+  }
+
   void _showCheckoutDialog(BuildContext context, CartState cartState) async {
+    final authCubit = context.read<AuthCubit>();
+    if (!authCubit.isAuthenticated || authCubit.currentUser == null) {
+      final loggedIn = await _showLoginRequiredDialog(context);
+      if (!loggedIn || !context.mounted) return;
+    }
+
+    final currentUser = authCubit.currentUser!;
     final storage = SecureStorageService();
-    final authService = AuthBiometricService();
     final savedTelegram = await storage.getSavedTelegramUser();
-    final savedPhone = await authService.getSavedAccount();
-    final savedName = await authService.getSavedUserName();
+    final savedPhone = currentUser.accountNumber;
+    final savedName = currentUser.fullName;
 
     if (!context.mounted) return;
 
@@ -63,7 +121,7 @@ class CartPage extends StatelessWidget {
 
           // 2. تشغيل تدفق الدفع عبر البوابة
           final orderId = 'ORD_${DateTime.now().millisecondsSinceEpoch}';
-          final effectivePhone = phone.isNotEmpty ? phone : (savedPhone ?? '777000000');
+          final effectivePhone = phone.isNotEmpty ? phone : savedPhone;
 
           final paymentResult = await basGateService.payWithBasGate(
             context: context,
@@ -71,7 +129,7 @@ class CartPage extends StatelessWidget {
             orderId: orderId,
             userAccount: effectivePhone,
             customerPhone: effectivePhone,
-            customerName: (savedName != null && savedName.isNotEmpty) ? savedName : 'عميل شبكتي',
+            customerName: savedName.isNotEmpty ? savedName : 'عميل شبكتي',
             description: 'طلب خدمات شبكتي (${cartState.totalCount} عنصر)',
           );
 
@@ -278,8 +336,43 @@ class CartPage extends StatelessWidget {
               );
             }
 
+            final isAuthenticated = context.watch<AuthCubit>().isAuthenticated;
+
             return Column(
               children: [
+                if (!isAuthenticated)
+                  Container(
+                    margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade50,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.amber.shade300),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.lock_outline_rounded, color: Colors.amber.shade900, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'يجب تسجيل الدخول لإتمام عملية الشراء وتأكيد الدفع',
+                            style: TextStyle(
+                              color: Colors.amber.shade900,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const LoginPage()),
+                          ),
+                          child: const Text('تسجيل الدخول', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                        ),
+                      ],
+                    ),
+                  ),
                 Expanded(
                   child: ListView.separated(
                     padding: const EdgeInsets.all(16),

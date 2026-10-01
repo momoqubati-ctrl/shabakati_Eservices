@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../data/models/product_model.dart';
+import '../../logic/auth/auth_cubit.dart';
 import '../../logic/cart/cart_cubit.dart';
 import '../../logic/catalog/catalog_cubit.dart';
 import '../../logic/catalog/catalog_state.dart';
 import '../widgets/product_card.dart';
+import 'auth/login_page.dart';
 
 class CatalogPage extends StatelessWidget {
   const CatalogPage({super.key});
@@ -147,17 +150,7 @@ class CatalogPage extends StatelessWidget {
                         return ProductCard(
                           product: product,
                           exchangeRate: state.exchangeRate,
-                          onAddToCart: () {
-                            context.read<CartCubit>().addProduct(product);
-                            ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('تمت إضافة "${product.name}" إلى السلة'),
-                                duration: const Duration(milliseconds: 1500),
-                                behavior: SnackBarBehavior.floating,
-                              ),
-                            );
-                          },
+                          onAddToCart: () => _handleAddToCart(context, product),
                         );
                       },
                     );
@@ -171,4 +164,106 @@ class CatalogPage extends StatelessWidget {
       ),
     );
   }
+
+  void _handleAddToCart(BuildContext context, ProductModel product) async {
+    final authCubit = context.read<AuthCubit>();
+    if (!authCubit.isAuthenticated) {
+      final shouldLogin = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => Directionality(
+          textDirection: TextDirection.rtl,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            icon: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.lock_person_rounded, size: 40, color: Colors.orange.shade800),
+            ),
+            title: const Text(
+              'تسجيل الدخول مطلوب',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+              textAlign: TextAlign.center,
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'لا يمكنك إضافة أي منتج إلى السلة أو الشراء إلا إذا كنت عميلاً مسجلاً وقمت بتسجيل الدخول.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13.5, height: 1.5),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.shopping_bag_outlined, size: 20, color: Colors.grey),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          product.name,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            actionsAlignment: MainAxisAlignment.spaceEvenly,
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text('إلغاء', style: TextStyle(color: Colors.grey.shade600)),
+              ),
+              FilledButton.icon(
+                icon: const Icon(Icons.login_rounded, size: 18),
+                label: const Text('تسجيل الدخول الآن'),
+                onPressed: () => Navigator.pop(ctx, true),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      if (shouldLogin == true && context.mounted) {
+        final loggedIn = await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginPage()),
+        );
+        if (loggedIn == true && context.mounted && authCubit.isAuthenticated) {
+          context.read<CartCubit>().addProduct(product);
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('تم تسجيل الدخول وإضافة "${product.name}" إلى السلة'),
+              duration: const Duration(seconds: 2),
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: Colors.green.shade800,
+            ),
+          );
+        }
+      }
+      return;
+    }
+
+    context.read<CartCubit>().addProduct(product);
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('تمت إضافة "${product.name}" إلى السلة'),
+        duration: const Duration(milliseconds: 1500),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
 }
+
