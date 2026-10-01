@@ -47,4 +47,15 @@ class ApiConfig {
 
   // Order processing constants
   static const int maxProcessingHours = 24;
+
+  // WhatsApp Gateway Configuration (WhatsQubatiBot)
+  static const String whatsappToken = String.fromEnvironment(
+    'WHATSAPP_TOKEN',
+    defaultValue: 'your_api_token_here',
+  );
+
+  static const String whatsappFrom = String.fromEnvironment(
+    'WHATSAPP_FROM',
+    defaultValue: '',
+  );
 }

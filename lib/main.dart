@@ -3,10 +3,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/config/api_config.dart';
 import 'core/network/dio_client.dart';
+import 'core/services/auth_biometric_service.dart';
+import 'core/services/otp_service.dart';
 import 'core/services/secure_storage_service.dart';
 import 'core/theme/app_theme.dart';
+import 'data/repositories/auth_repository.dart';
 import 'data/repositories/order_repository.dart';
 import 'data/repositories/product_repository.dart';
+import 'logic/auth/auth_cubit.dart';
 import 'logic/cart/cart_cubit.dart';
 import 'logic/catalog/catalog_cubit.dart';
 import 'logic/orders/orders_cubit.dart';
@@ -26,6 +30,9 @@ void main() async {
   // تهيئة عميل Dio مع معالج توقيع Digital Vault وخدمات التخزين
   final dioClient = DioClient();
   final secureStorage = SecureStorageService();
+  final biometricService = AuthBiometricService();
+  final otpService = OtpService(supabase: supabaseClient);
+
   final productRepository = ProductRepository(
     dioClient,
     supabaseClient: supabaseClient,
@@ -34,13 +41,17 @@ void main() async {
     dioClient: dioClient,
     supabaseClient: supabaseClient,
   );
+  final authRepository = AuthRepository(supabase: supabaseClient);
 
   runApp(
     MultiRepositoryProvider(
       providers: [
         RepositoryProvider<IProductRepository>.value(value: productRepository),
         RepositoryProvider<IOrderRepository>.value(value: orderRepository),
+        RepositoryProvider<IAuthRepository>.value(value: authRepository),
         RepositoryProvider<SecureStorageService>.value(value: secureStorage),
+        RepositoryProvider<AuthBiometricService>.value(value: biometricService),
+        RepositoryProvider<OtpService>.value(value: otpService),
       ],
       child: MultiBlocProvider(
         providers: [
@@ -55,6 +66,13 @@ void main() async {
               orderRepository: orderRepository,
               secureStorageService: secureStorage,
             )..loadOrders(),
+          ),
+          BlocProvider<AuthCubit>(
+            create: (_) => AuthCubit(
+              authRepository: authRepository,
+              biometricService: biometricService,
+              otpService: otpService,
+            ),
           ),
         ],
         child: const ShabaktiEservicesApp(),

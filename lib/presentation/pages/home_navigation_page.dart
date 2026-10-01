@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../logic/cart/cart_cubit.dart';
 import '../../logic/cart/cart_state.dart';
+import 'account_profile_page.dart';
 import 'cart_page.dart';
 import 'catalog_page.dart';
 import 'orders_page.dart';
@@ -24,6 +25,7 @@ class _HomeNavigationPageState extends State<HomeNavigationPage> {
         setState(() => _currentIndex = 2);
       }),
       const OrdersPage(),
+      const AccountProfilePage(),
     ];
 
     return Directionality(
@@ -69,6 +71,11 @@ class _HomeNavigationPageState extends State<HomeNavigationPage> {
               icon: Icon(Icons.receipt_long_outlined),
               selectedIcon: Icon(Icons.receipt_long_rounded),
               label: 'طلباتي واشتراكاتي',
+            ),
+            const NavigationDestination(
+              icon: Icon(Icons.person_outline_rounded),
+              selectedIcon: Icon(Icons.person_rounded),
+              label: 'حسابي',
             ),
           ],
         ),
