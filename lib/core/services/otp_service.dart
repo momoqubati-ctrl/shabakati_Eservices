@@ -44,31 +44,24 @@ class OtpService {
         'expires_at': expiresAt.toIso8601String(),
       });
 
-      // 2. إرسال الرسالة عبر بوابة WhatsQubatiBot
+      // 2. إرسال الرسالة عبر بوابة الخادم المشفرة والآمنة (Serverless Backend /api/send-otp)
       if (channel == 'whatsapp') {
-        const endpoint = 'https://whatsqubatibot-9x83.onrender.com/api/qr/rest/send_message';
-        final messageText = 'مرحباً بك في بوابة شبكتي للخدمات الرقمية.\n\nرمز التحقق لتسجيل حسابك هو:\n* $otp *\n\nصالح لمدة 5 دقائق. لا تشارك هذا الرمز مع أي شخص.';
-
         try {
           await _dio.post(
-            endpoint,
+            '${ApiConfig.vercelBackendUrl}/api/send-otp',
             data: {
-              'messageType': 'text',
-              'requestType': 'POST',
-              'token': ApiConfig.whatsappToken,
-              'from': ApiConfig.whatsappFrom,
-              'to': cleanPhone,
-              'text': messageText,
+              'phone': cleanPhone,
+              'otp': otp,
+              'channel': channel,
             },
             options: Options(
               headers: {'Content-Type': 'application/json'},
-              sendTimeout: const Duration(seconds: 10),
-              receiveTimeout: const Duration(seconds: 10),
+              sendTimeout: const Duration(seconds: 15),
+              receiveTimeout: const Duration(seconds: 15),
             ),
           );
         } catch (e) {
-          // في حال كان خادم الرندر في وضع Sleep أو انتهت مهلة الإرسال، يستمر الرمز محفوظاً في قاعدة البيانات للتحقق
-          debugPrint('WhatsApp gateway dispatch notice: $e');
+          debugPrint('Backend OTP dispatch notice: $e');
         }
       }
 

@@ -2,6 +2,7 @@
   "name": "shabakati-eservices",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "cd admin_dashboard && npm install && npm run build"
   }

@@ -20,7 +20,7 @@ class ApiConfig {
     'DIGITAL_VAULT_API_SECRET',
     defaultValue: 'ssec_96c632b8e715694af4b0fa62c8872cd2c99901fe0f13323c0cfb55251e335954',
   );
-
+  
   // Telegram Bot Support Configuration
   static const String telegramBotUsername = String.fromEnvironment(
     'TELEGRAM_BOT_USERNAME',
@@ -34,7 +34,7 @@ class ApiConfig {
   
   static const String defaultSupportLink = 'https://t.me/sahm';
 
-  // Supabase Backend Configuration
+  // Supabase Backend Configuration (Public Anon Key)
   static const String supabaseUrl = String.fromEnvironment(
     'SUPABASE_URL',
     defaultValue: 'https://enutfwspwrzpvhmtgftl.supabase.co',
@@ -47,15 +47,4 @@ class ApiConfig {
 
   // Order processing constants
   static const int maxProcessingHours = 24;
-
-  // WhatsApp Gateway Configuration (WhatsQubatiBot)
-  static const String whatsappToken = String.fromEnvironment(
-    'WHATSAPP_TOKEN',
-    defaultValue: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiI5OGQ0MjI1ZTNhNzc4NjE4ZDdkZDcyNGFlOTI4M2ZiNiIsInJvbGUiOiJ1c2VyIiwiaWF0IjoxNzkwNTM5NTMzfQ.LBj3W0Kq2gIaaMIPwj8V-_sueQhesA812qj4Eyksv_s',
-  );
-
-  static const String whatsappFrom = String.fromEnvironment(
-    'WHATSAPP_FROM',
-    defaultValue: '967737241475',
-  );
 }
