@@ -18,24 +18,36 @@ export default async function handler(req, res) {
       return res.status(400).json({ success: false, error: 'Phone number is required' });
     }
 
-    const cleanPhone = String(phone).replace(/[^0-9]/g, '');
+    // إزالة أي إشارة + أو مسافات أو رموز غير رقمية بشكل قاطع
+    let cleanPhone = String(phone).replace(/[^0-9]/g, '');
 
-    const token = process.env.WHATSAPP_TOKEN || process.env.VITE_WHATSAPP_TOKEN;
-    const from = process.env.WHATSAPP_FROM || process.env.VITE_WHATSAPP_FROM;
-
-    if (!token || !from) {
-      return res.status(500).json({
-        success: false,
-        error: 'WhatsApp configuration is missing in server environment variables (.env)'
-      });
+    // معالجة الصفر الزائد بعد كود الدولة (مثلاً 9670777... تحول إلى 967777...)
+    if (cleanPhone.startsWith('9670')) {
+      cleanPhone = '967' + cleanPhone.substring(4);
+    } else if (cleanPhone.startsWith('0') && cleanPhone.length === 10) {
+      cleanPhone = '967' + cleanPhone.substring(1);
+    } else if (!cleanPhone.startsWith('967') && cleanPhone.length === 9) {
+      cleanPhone = '967' + cleanPhone;
     }
+
+    const token = process.env.WHATSAPP_TOKEN || 
+                  process.env.VITE_WHATSAPP_TOKEN || 
+                  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiI5OGQ0MjI1ZTNhNzc4NjE4ZDdkZDcyNGFlOTI4M2ZiNiIsInJvbGUiOiJ1c2VyIiwiaWF0IjoxNzkwNTM5NTMzfQ.LBj3W0Kq2gIaaMIPwj8V-_sueQhesA812qj4Eyksv_s';
+
+    const from = process.env.WHATSAPP_FROM || 
+                 process.env.VITE_WHATSAPP_FROM || 
+                 '967737241475';
 
     const text = message || `مرحباً بك في بوابة شبكتي للخدمات الرقمية.\n\nرمز التحقق لتسجيل حسابك هو:\n* ${otp} *\n\nصالح لمدة 5 دقائق. لا تشارك هذا الرمز مع أي شخص.`;
 
     const endpoint = 'https://whatsqubatibot-9x83.onrender.com/api/qr/rest/send_message';
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 45000);
+
     const response = await fetch(endpoint, {
       method: 'POST',
+      signal: controller.signal,
       headers: {
         'Content-Type': 'application/json'
       },
@@ -48,6 +60,8 @@ export default async function handler(req, res) {
         text
       })
     });
+
+    clearTimeout(timeout);
 
     const data = await response.json();
     return res.status(response.status).json(data);

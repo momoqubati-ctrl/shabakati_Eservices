@@ -39,7 +39,10 @@ class _RegisterPageState extends State<RegisterPage> {
     if (!_formKey.currentState!.validate()) return;
 
     final name = _nameController.text.trim();
-    final phone = _phoneController.text.trim();
+    var phone = _phoneController.text.trim().replaceAll(RegExp(r'[^0-9]'), '');
+    if (phone.startsWith('0')) {
+      phone = phone.substring(1);
+    }
     final pin = _pinController.text.trim();
     final confirmPin = _confirmPinController.text.trim();
 
