@@ -87,6 +87,7 @@ class OrderRepository implements IOrderRepository {
         deliveredUrl: deliveredUrl,
         createdAt: DateTime.now(),
         telegramUser: telegramUser,
+        contactPhone: contactPhone,
       );
 
       // 3. حفظ نسخة من الطلب في قاعدة بيانات Supabase للمتابعة بدون تسجيل دخول
@@ -251,6 +252,7 @@ class OrderRepository implements IOrderRepository {
           deliveredUrl: url,
           createdAt: order.createdAt,
           telegramUser: order.telegramUser,
+          contactPhone: order.contactPhone,
         );
       }
     } catch (_) {}

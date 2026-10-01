@@ -11,6 +11,7 @@ class OrderModel {
   final String? deliveredUrl;
   final DateTime createdAt;
   final String? telegramUser;
+  final String? contactPhone;
 
   OrderModel({
     this.id,
@@ -24,6 +25,7 @@ class OrderModel {
     this.deliveredUrl,
     required this.createdAt,
     this.telegramUser,
+    this.contactPhone,
   });
 
   bool get isReady => fulfillmentStatus == 'ready' || status == 'completed';
@@ -91,6 +93,7 @@ class OrderModel {
       deliveredUrl: url,
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ?? DateTime.now(),
       telegramUser: json['telegram_user']?.toString(),
+      contactPhone: json['contact_phone']?.toString(),
     );
   }
 
@@ -99,7 +102,7 @@ class OrderModel {
       'external_order_id': externalOrderId,
       'device_id': deviceId,
       'telegram_user': telegramUser,
-      'contact_phone': contactPhone,
+      'contact_phone': contactPhone ?? this.contactPhone,
       'contact_email': contactEmail,
       'seller_order_id': sellerOrderId,
       'status': status,

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/services/basgate_payment_service.dart';
 import '../../core/services/secure_storage_service.dart';
+import '../../core/services/whatsapp_launcher.dart';
 import '../../logic/auth/auth_cubit.dart';
 import '../../logic/cart/cart_cubit.dart';
 import '../../logic/cart/cart_state.dart';
@@ -14,6 +16,12 @@ class CartPage extends StatelessWidget {
   final VoidCallback onNavigateToOrders;
 
   const CartPage({super.key, required this.onNavigateToOrders});
+
+  bool _isUrl(String? text) {
+    if (text == null) return false;
+    final trimmed = text.trim().toLowerCase();
+    return trimmed.startsWith('http://') || trimmed.startsWith('https://');
+  }
 
   Future<bool> _showLoginRequiredDialog(BuildContext context) async {
     final shouldLogin = await showDialog<bool>(
@@ -319,6 +327,49 @@ class CartPage extends StatelessWidget {
                               ],
                             ),
                           ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            alignment: WrapAlignment.end,
+                            children: [
+                              if (_isUrl(order.deliveredKey))
+                                OutlinedButton.icon(
+                                  icon: const Icon(Icons.open_in_browser_rounded, size: 16),
+                                  label: const Text('فتح في المتصفح', style: TextStyle(fontSize: 11.5)),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                  onPressed: () async {
+                                    final uri = Uri.tryParse(order.deliveredKey!.trim());
+                                    if (uri != null) {
+                                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                    }
+                                  },
+                                ),
+                              FilledButton.icon(
+                                icon: const Icon(Icons.chat_rounded, size: 16),
+                                label: const Text('إرسال عبر واتساب', style: TextStyle(fontSize: 11.5)),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: const Color(0xFF25D366),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                                onPressed: () {
+                                  final targetPhone = effectivePhone.isNotEmpty
+                                      ? effectivePhone
+                                      : (order.contactPhone ?? '');
+                                  WhatsAppLauncher.sendKeyToCustomer(
+                                    phone: targetPhone,
+                                    keyOrUrl: order.deliveredKey!,
+                                    orderId: order.externalOrderId,
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
                           const SizedBox(height: 12),
                         ],
 
@@ -384,6 +435,36 @@ class CartPage extends StatelessWidget {
                     ),
                   ),
                   actions: [
+                    if (_isUrl(order?.deliveredKey))
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.open_in_browser_rounded, size: 16),
+                        label: const Text('فتح في المتصفح'),
+                        onPressed: () async {
+                          final uri = Uri.tryParse(order!.deliveredKey!.trim());
+                          if (uri != null) {
+                            await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          }
+                        },
+                      ),
+                    if (order?.deliveredKey != null && order!.deliveredKey!.isNotEmpty)
+                      FilledButton.icon(
+                        icon: const Icon(Icons.chat_rounded, size: 16),
+                        label: const Text('إرسال عبر واتساب'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF25D366),
+                          foregroundColor: Colors.white,
+                        ),
+                        onPressed: () {
+                          final targetPhone = effectivePhone.isNotEmpty
+                              ? effectivePhone
+                              : (order.contactPhone ?? '');
+                          WhatsAppLauncher.sendKeyToCustomer(
+                            phone: targetPhone,
+                            keyOrUrl: order.deliveredKey!,
+                            orderId: order.externalOrderId,
+                          );
+                        },
+                      ),
                     FilledButton(
                       onPressed: () {
                         Navigator.pop(ctx);

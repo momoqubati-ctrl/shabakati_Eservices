@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/services/whatsapp_launcher.dart';
 import '../../data/models/order_model.dart';
 
 class OrderStatusCard extends StatelessWidget {
@@ -162,6 +164,37 @@ class OrderStatusCard extends StatelessWidget {
                   ],
                 ),
               ),
+              const SizedBox(height: 10),
+
+              // فوتر بطاقة المفتاح: فتح بالمتصفح وإرسال واتساب
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.end,
+                children: [
+                  if (_isUrl(order.deliveredKey))
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.open_in_browser_rounded, size: 16),
+                      label: const Text('فتح في المتصفح', style: TextStyle(fontSize: 11.5)),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: () => _openBrowser(context, order.deliveredKey!),
+                    ),
+                  FilledButton.icon(
+                    icon: const Icon(Icons.chat_rounded, size: 16),
+                    label: const Text('إرسال عبر واتساب', style: TextStyle(fontSize: 11.5)),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF25D366),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: () => _sendViaWhatsApp(context, order),
+                  ),
+                ],
+              ),
             ] else if (isProcessing) ...[
               Container(
                 padding: const EdgeInsets.all(10),
@@ -193,5 +226,70 @@ class OrderStatusCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  bool _isUrl(String? text) {
+    if (text == null) return false;
+    final trimmed = text.trim().toLowerCase();
+    return trimmed.startsWith('http://') || trimmed.startsWith('https://');
+  }
+
+  Future<void> _openBrowser(BuildContext context, String url) async {
+    final uri = Uri.tryParse(url.trim());
+    if (uri != null) {
+      try {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } catch (_) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('تعذر فتح الرابط في المتصفح')),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _sendViaWhatsApp(BuildContext context, OrderModel order) async {
+    String phone = order.contactPhone?.trim() ?? '';
+
+    if (phone.isEmpty) {
+      final controller = TextEditingController();
+      final entered = await showDialog<String>(
+        context: context,
+        builder: (ctx) => Directionality(
+          textDirection: TextDirection.rtl,
+          child: AlertDialog(
+            title: const Text('إرسال الكود عبر واتساب', style: TextStyle(fontSize: 16)),
+            content: TextField(
+              controller: controller,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'رقم هاتف الواتساب',
+                hintText: '777000000',
+                prefixIcon: Icon(Icons.phone_android_rounded),
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+                child: const Text('إرسال'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (entered != null && entered.isNotEmpty) {
+        phone = entered;
+      }
+    }
+
+    if (phone.isNotEmpty && order.deliveredKey != null) {
+      await WhatsAppLauncher.sendKeyToCustomer(
+        phone: phone,
+        keyOrUrl: order.deliveredKey!,
+        orderId: order.externalOrderId,
+      );
+    }
   }
 }
