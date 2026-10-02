@@ -61,7 +61,54 @@ export class DigitalVaultService {
     const path = `/api/seller/v1/orders/${sellerOrderId}`;
     const headers = this.generateHeaders('GET', path);
     const resp = await fetch(`${API_CONFIG.baseUrl}/orders/${sellerOrderId}`, { headers });
-    return await resp.json();
+    const text = await resp.text();
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch (_) {
+      data = { success: false, error: text };
+    }
+    return { ...data, httpStatus: resp.status, ok: resp.ok, rawText: text };
+  }
+
+  static async getOrders(limit = 20) {
+    const path = `/api/seller/v1/orders?limit=${limit}`;
+    const headers = this.generateHeaders('GET', path);
+    const resp = await fetch(`${API_CONFIG.baseUrl}/orders?limit=${limit}`, { headers });
+    const text = await resp.text();
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch (_) {
+      data = { success: false, error: text };
+    }
+    return { ...data, httpStatus: resp.status, ok: resp.ok, rawText: text };
+  }
+
+  static async createOrder({ externalOrderId, items }) {
+    const path = '/api/seller/v1/orders';
+    const body = {
+      external_order_id: externalOrderId,
+      items: items.map(i => ({
+        product_id: Number(i.product_id),
+        quantity: Number(i.quantity || 1)
+      }))
+    };
+    const headers = this.generateHeaders('POST', path, body);
+    headers['Idempotency-Key'] = externalOrderId;
+    const resp = await fetch(`${API_CONFIG.baseUrl}/orders`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body)
+    });
+    const text = await resp.text();
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch (_) {
+      data = { success: false, error: text };
+    }
+    return { ...data, httpStatus: resp.status, ok: resp.ok, rawText: text };
   }
 
   static async requestDeliveryAccess(sellerOrderId) {
@@ -73,7 +120,14 @@ export class DigitalVaultService {
       headers,
       body: '{}'
     });
-    return await resp.json();
+    const text = await resp.text();
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch (_) {
+      data = { success: false, error: text };
+    }
+    return { ...data, httpStatus: resp.status, ok: resp.ok, rawText: text };
   }
 
   static async consumeDeliveryAccess(accessToken) {
@@ -85,6 +139,33 @@ export class DigitalVaultService {
       headers,
       body: JSON.stringify(body)
     });
-    return await resp.json();
+    const text = await resp.text();
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch (_) {
+      data = { success: false, error: text };
+    }
+    return { ...data, httpStatus: resp.status, ok: resp.ok, rawText: text };
+  }
+
+  static async requestCancellation(sellerOrderId, reason) {
+    const path = `/api/seller/v1/orders/${sellerOrderId}/cancellation-requests`;
+    const body = { reason: (reason || 'إلغاء الطلب بناء على رغبة العميل').substring(0, 500) };
+    const headers = this.generateHeaders('POST', path, body);
+    headers['Idempotency-Key'] = `cancel-${sellerOrderId}-${Date.now()}`;
+    const resp = await fetch(`${API_CONFIG.baseUrl}/orders/${sellerOrderId}/cancellation-requests`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body)
+    });
+    const text = await resp.text();
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch (_) {
+      data = { success: false, error: text };
+    }
+    return { ...data, httpStatus: resp.status, ok: resp.ok, rawText: text };
   }
 }

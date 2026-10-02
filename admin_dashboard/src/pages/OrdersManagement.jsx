@@ -6,20 +6,26 @@ import {
   CheckCircle2, 
   Send, 
   Key, 
+  Ban,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
 
 export const OrdersManagement = ({ orders = [], onSelectOrder }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all'); // all, processing, ready
+  const [statusFilter, setStatusFilter] = useState('all'); // all, processing, ready, failed
 
   const filteredOrders = orders.filter((order) => {
+    const isReady = order.fulfillment_status === 'ready' || order.status === 'completed';
+    const isFailed = order.fulfillment_status === 'failed' || order.status === 'cancelled';
+
     // فلتر الحالة
     if (statusFilter === 'processing') {
-      if (order.fulfillment_status === 'ready' || order.status === 'completed') return false;
+      if (isReady || isFailed) return false;
     } else if (statusFilter === 'ready') {
-      if (order.fulfillment_status !== 'ready' && order.status !== 'completed') return false;
+      if (!isReady) return false;
+    } else if (statusFilter === 'failed') {
+      if (!isFailed) return false;
     }
 
     // فلتر البحث
@@ -82,6 +88,17 @@ export const OrdersManagement = ({ orders = [], onSelectOrder }) => {
             <CheckCircle2 className="w-3.5 h-3.5" />
             <span>المكتملة والمسلّمة</span>
           </button>
+          <button
+            onClick={() => setStatusFilter('failed')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 ${
+              statusFilter === 'failed'
+                ? 'bg-rose-600 text-white shadow-sm'
+                : 'bg-slate-100 dark:bg-slate-700 text-rose-600 dark:text-rose-400 hover:bg-slate-200'
+            }`}
+          >
+            <Ban className="w-3.5 h-3.5" />
+            <span>الملغاة والفاشلة</span>
+          </button>
         </div>
       </div>
 
@@ -103,6 +120,7 @@ export const OrdersManagement = ({ orders = [], onSelectOrder }) => {
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
               {filteredOrders.map((order) => {
                 const isReady = order.fulfillment_status === 'ready' || order.status === 'completed';
+                const isFailed = order.fulfillment_status === 'failed' || order.status === 'cancelled';
                 const hasKey = order.delivered_assets && order.delivered_assets.length > 0;
                 return (
                   <tr key={order.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-750/50 transition-colors">
@@ -133,10 +151,14 @@ export const OrdersManagement = ({ orders = [], onSelectOrder }) => {
                       <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold inline-flex items-center gap-1 ${
                         isReady 
                           ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400' 
-                          : 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400'
+                          : isFailed
+                            ? 'bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-400'
+                            : 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400'
                       }`}>
-                        {isReady ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                        {isReady ? 'مكتمل (جاهز)' : 'قيد المعالجة (24 ساعة)'}
+                        {isReady && <CheckCircle2 className="w-3.5 h-3.5" />}
+                        {isFailed && <Ban className="w-3.5 h-3.5" />}
+                        {!isReady && !isFailed && <Clock className="w-3.5 h-3.5" />}
+                        {isReady ? 'مكتمل (جاهز)' : (isFailed ? 'ملغي / فاشل' : 'قيد المعالجة (24 ساعة)')}
                       </span>
                     </td>
                     <td className="p-4 font-mono text-xs">
@@ -145,7 +167,9 @@ export const OrdersManagement = ({ orders = [], onSelectOrder }) => {
                           <Key className="w-3 h-3" /> تم التسليم
                         </span>
                       ) : (
-                        <span className="text-amber-600 dark:text-amber-500">⏳ لم يسلّم بعد</span>
+                        <span className={isFailed ? 'text-rose-600 dark:text-rose-400 font-bold' : 'text-amber-600 dark:text-amber-500'}>
+                          {isFailed ? '❌ ملغي' : '⏳ لم يسلّم بعد'}
+                        </span>
                       )}
                     </td>
                     <td className="p-4 text-center">

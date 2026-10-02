@@ -12,6 +12,7 @@ class OrderModel {
   final DateTime createdAt;
   final String? telegramUser;
   final String? contactPhone;
+  final String? notes;
 
   OrderModel({
     this.id,
@@ -26,6 +27,7 @@ class OrderModel {
     required this.createdAt,
     this.telegramUser,
     this.contactPhone,
+    this.notes,
   });
 
   bool get isReady => fulfillmentStatus == 'ready' || status == 'completed';
@@ -94,6 +96,7 @@ class OrderModel {
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ?? DateTime.now(),
       telegramUser: json['telegram_user']?.toString(),
       contactPhone: json['contact_phone']?.toString(),
+      notes: json['notes']?.toString() ?? json['failure_reason']?.toString(),
     );
   }
 
@@ -111,6 +114,7 @@ class OrderModel {
       'currency': currency,
       'idempotency_key': externalOrderId, // Use stable order uuid
       'delivered_assets': deliveredKey != null ? [{'type': 'key', 'value': deliveredKey}] : null,
+      'notes': notes,
       'created_at': createdAt.toIso8601String(),
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     };

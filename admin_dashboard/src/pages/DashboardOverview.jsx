@@ -192,7 +192,7 @@ export const DashboardOverview = ({
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
               {orders.slice(0, 5).map((order) => {
                 const isReady = order.fulfillment_status === 'ready' || order.status === 'completed';
-                const isProcessing = order.fulfillment_status === 'processing' || order.status === 'paid';
+                const isFailed = order.fulfillment_status === 'failed' || order.status === 'cancelled';
                 return (
                   <tr key={order.id || order.external_order_id} className="hover:bg-slate-50/50 dark:hover:bg-slate-750">
                     <td className="p-3.5 font-mono font-bold text-blue-600 dark:text-blue-400">
@@ -208,13 +208,15 @@ export const DashboardOverview = ({
                       <span className={`px-2.5 py-1 rounded-full font-bold text-[10px] inline-flex items-center gap-1 ${
                         isReady 
                           ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400' 
-                          : 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400'
+                          : isFailed
+                            ? 'bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-400'
+                            : 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400'
                       }`}>
-                        {isReady ? 'تم التسليم' : 'قيد المعالجة (24 ساعة)'}
+                        {isReady ? 'تم التسليم' : (isFailed ? 'ملغي / فاشل' : 'قيد المعالجة (24 ساعة)')}
                       </span>
                     </td>
                     <td className="p-3.5 font-mono text-slate-500">
-                      {order.delivered_assets ? '✅ مسلّم' : '⏳ بانتظار التجهيز'}
+                      {order.delivered_assets ? '✅ مسلّم' : (isFailed ? '❌ ملغي' : '⏳ بانتظار التجهيز')}
                     </td>
                     <td className="p-3.5 text-center">
                       <button

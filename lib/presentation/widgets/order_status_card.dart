@@ -221,6 +221,70 @@ class OrderStatusCard extends StatelessWidget {
                   ],
                 ),
               ),
+            ] else if (order.isFailed) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFFCA5A5)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: const [
+                        Icon(Icons.cancel_outlined, color: Color(0xFFDC2626), size: 18),
+                        SizedBox(width: 6),
+                        Text(
+                          'الطلب ملغي / فاشل',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12.5,
+                            color: Color(0xFF991B1B),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      (order.notes != null && order.notes!.trim().isNotEmpty)
+                          ? 'ملاحظة الإدارة:\n${order.notes!.trim()}'
+                          : 'تم إلغاء هذه العملية من قبل الإدارة، وتمت مراجعة الحساب.',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        height: 1.45,
+                        color: Color(0xFF7F1D1D),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.support_agent_rounded, size: 16),
+                  label: const Text('متابعة مع الدعم الفني', style: TextStyle(fontSize: 11.5)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFB91C1C),
+                    side: const BorderSide(color: Color(0xFFFCA5A5)),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () {
+                    final msg = '''
+مرحباً الدعم الفني لشبكتي،
+استفسار بخصوص طلبي الملغي:
+• رقم الطلب: #${order.externalOrderId.replaceAll('ord_', '')}
+• المبلغ: ${order.displayTotalYer()}
+• ملاحظة الإدارة: ${order.notes ?? 'لا توجد ملاحظة'}
+'''.trim();
+                    WhatsAppLauncher.openSupportChat(message: msg);
+                  },
+                ),
+              ),
             ],
           ],
         ),

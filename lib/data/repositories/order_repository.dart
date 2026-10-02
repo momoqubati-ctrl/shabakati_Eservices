@@ -283,6 +283,7 @@ class OrderRepository implements IOrderRepository {
           createdAt: order.createdAt,
           telegramUser: order.telegramUser,
           contactPhone: order.contactPhone,
+          notes: order.notes,
         );
       }
     } catch (_) {}
