@@ -42,6 +42,7 @@ void main() async {
   final orderRepository = OrderRepository(
     dioClient: dioClient,
     supabaseClient: supabaseClient,
+    secureStorageService: secureStorage,
   );
   final authRepository = AuthRepository(supabase: supabaseClient);
 

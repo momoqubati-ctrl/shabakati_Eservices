@@ -32,9 +32,49 @@ class OrderModel {
     this.paymentId,
   });
 
-  bool get isReady => fulfillmentStatus == 'ready' || status == 'completed';
-  bool get isProcessing => fulfillmentStatus == 'processing' || status == 'paid';
+  bool get isReady =>
+      fulfillmentStatus == 'ready' ||
+      status == 'completed' ||
+      (deliveredKey != null && deliveredKey!.isNotEmpty);
+  bool get isProcessing =>
+      !isReady &&
+      !isFailed &&
+      (fulfillmentStatus == 'processing' || status == 'paid' || status == 'pending');
   bool get isFailed => fulfillmentStatus == 'failed' || status == 'cancelled';
+
+  OrderModel copyWith({
+    int? id,
+    String? externalOrderId,
+    int? sellerOrderId,
+    String? status,
+    String? fulfillmentStatus,
+    int? totalCents,
+    String? currency,
+    String? deliveredKey,
+    String? deliveredUrl,
+    DateTime? createdAt,
+    String? telegramUser,
+    String? contactPhone,
+    String? notes,
+    String? paymentId,
+  }) {
+    return OrderModel(
+      id: id ?? this.id,
+      externalOrderId: externalOrderId ?? this.externalOrderId,
+      sellerOrderId: sellerOrderId ?? this.sellerOrderId,
+      status: status ?? this.status,
+      fulfillmentStatus: fulfillmentStatus ?? this.fulfillmentStatus,
+      totalCents: totalCents ?? this.totalCents,
+      currency: currency ?? this.currency,
+      deliveredKey: deliveredKey ?? this.deliveredKey,
+      deliveredUrl: deliveredUrl ?? this.deliveredUrl,
+      createdAt: createdAt ?? this.createdAt,
+      telegramUser: telegramUser ?? this.telegramUser,
+      contactPhone: contactPhone ?? this.contactPhone,
+      notes: notes ?? this.notes,
+      paymentId: paymentId ?? this.paymentId,
+    );
+  }
 
   double get totalAmount => totalCents / 100.0;
   String get displayTotal => '\$${totalAmount.toStringAsFixed(2)} $currency';

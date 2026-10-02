@@ -43,6 +43,45 @@ class _OrdersPageState extends State<OrdersPage> with SingleTickerProviderStateM
         orderDate.day == now.day;
   }
 
+  bool _isRefreshing = false;
+
+  Future<void> _handleRefresh() async {
+    if (_isRefreshing) return;
+    setState(() => _isRefreshing = true);
+    try {
+      await context.read<OrdersCubit>().refreshAllOrders();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                SizedBox(width: 8),
+                Text('تم تحديث ومزامنة حالة الطلبات بنجاح'),
+              ],
+            ),
+            duration: Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تعذر مزامنة الطلبات، يرجى المحاولة لاحقاً'),
+            duration: Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isRefreshing = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -67,9 +106,18 @@ class _OrdersPageState extends State<OrdersPage> with SingleTickerProviderStateM
               centerTitle: false,
               actions: [
                 IconButton(
-                  icon: const Icon(Icons.refresh_rounded),
+                  icon: _isRefreshing
+                      ? SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: colorScheme.primary,
+                          ),
+                        )
+                      : const Icon(Icons.refresh_rounded),
                   tooltip: 'تحديث الطلبات',
-                  onPressed: () => context.read<OrdersCubit>().loadOrders(),
+                  onPressed: _isRefreshing ? null : _handleRefresh,
                 ),
               ],
               bottom: TabBar(
@@ -152,12 +200,12 @@ class _OrdersPageState extends State<OrdersPage> with SingleTickerProviderStateM
                           _OrderListTab(
                             orders: todayOrders,
                             isTodayTab: true,
-                            onRefresh: () => context.read<OrdersCubit>().loadOrders(),
+                            onRefresh: _handleRefresh,
                           ),
                           _OrderListTab(
                             orders: previousOrders,
                             isTodayTab: false,
-                            onRefresh: () => context.read<OrdersCubit>().loadOrders(),
+                            onRefresh: _handleRefresh,
                           ),
                         ],
                       ),
@@ -349,7 +397,16 @@ class _OrderListTabState extends State<_OrderListTab> with AutomaticKeepAliveCli
                         final order = displayedOrders[index];
                         return OrderStatusCard(
                           order: order,
-                          onRefresh: () => context.read<OrdersCubit>().refreshOrder(order),
+                          onRefresh: () async {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('جاري فحص وتحديث حالة الطلب من المزود...'),
+                                duration: Duration(seconds: 1),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                            await context.read<OrdersCubit>().refreshOrder(order);
+                          },
                         );
                       }
 

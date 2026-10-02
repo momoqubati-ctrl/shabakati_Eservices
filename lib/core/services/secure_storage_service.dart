@@ -97,5 +97,24 @@ class SecureStorageService {
     await _storage.delete(key: _keyActiveUser);
     await _storage.delete(key: _keySessionExpiresAt);
   }
+
+  /// حفظ المفتاح المسلّم محلياً لضمان عدم فقدانه أو اعتماده فقط على قاعدة البيانات
+  Future<void> saveDeliveredAsset(String orderIdOrExternal, String key, [String? url]) async {
+    final cacheKey = 'delivered_asset_$orderIdOrExternal';
+    await _storage.write(key: cacheKey, value: jsonEncode({'key': key, 'url': url}));
+  }
+
+  /// استرجاع المفتاح المسلّم محلياً
+  Future<Map<String, String?>?> getDeliveredAsset(String orderIdOrExternal) async {
+    final cacheKey = 'delivered_asset_$orderIdOrExternal';
+    final str = await _storage.read(key: cacheKey);
+    if (str == null || str.isEmpty) return null;
+    try {
+      final map = jsonDecode(str) as Map<String, dynamic>;
+      return {'key': map['key']?.toString(), 'url': map['url']?.toString()};
+    } catch (_) {
+      return null;
+    }
+  }
 }
 

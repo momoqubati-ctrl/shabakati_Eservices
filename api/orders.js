@@ -63,6 +63,33 @@ export default async function handler(req, res) {
             body: consumeSign.rawBody
           });
           const consumeData = await consumeRes.json();
+
+          // مزامنة حالة الطلب والأكواد في Supabase فور استهلاك المفتاح بنجاح
+          if (Array.isArray(consumeData?.data?.assets) && consumeData.data.assets.length > 0) {
+            const rawAssets = consumeData.data.assets.map(a => ({
+              type: a.type || 'key',
+              value: a.value || '',
+              ...(a.url ? { url: a.url } : {})
+            })).filter(a => a.value);
+
+            try {
+              fetch(`${SUPABASE_URL}/rest/v1/orders?seller_order_id=eq.${seller_order_id}`, {
+                method: 'PATCH',
+                headers: {
+                  'apikey': SUPABASE_KEY,
+                  'Authorization': `Bearer ${SUPABASE_KEY}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  status: 'completed',
+                  fulfillment_status: 'ready',
+                  delivered_assets: rawAssets,
+                  updated_at: new Date().toISOString()
+                })
+              }).catch(() => {});
+            } catch (_) {}
+          }
+
           return res.status(consumeRes.status).json(consumeData);
         }
         return res.status(tokRes.status).json(tokData);
@@ -85,8 +112,8 @@ export default async function handler(req, res) {
 
   if (req.method === 'PATCH' || (req.method === 'POST' && req.body?.action === 'update')) {
     const { id, external_order_id, fulfillment_status, status, delivered_assets, seller_order_id, notes } = req.body || {};
-    if (!id && !external_order_id) {
-      return res.status(400).json({ success: false, error: 'id or external_order_id is required' });
+    if (!id && !external_order_id && !seller_order_id) {
+      return res.status(400).json({ success: false, error: 'id or external_order_id or seller_order_id is required' });
     }
 
     const updatePayload = {
@@ -99,7 +126,10 @@ export default async function handler(req, res) {
     if (notes !== undefined) updatePayload.notes = notes;
 
     try {
-      const queryParam = id ? `id=eq.${id}` : `external_order_id=eq.${external_order_id}`;
+      let queryParam = '';
+      if (id) queryParam = `id=eq.${id}`;
+      else if (external_order_id) queryParam = `external_order_id=eq.${external_order_id}`;
+      else if (seller_order_id) queryParam = `seller_order_id=eq.${seller_order_id}`;
       const patchRes = await fetch(`${SUPABASE_URL}/rest/v1/orders?${queryParam}`, {
         method: 'PATCH',
         headers: {

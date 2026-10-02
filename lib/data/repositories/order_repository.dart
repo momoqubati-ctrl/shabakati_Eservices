@@ -2,7 +2,9 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
+import '../../core/config/api_config.dart';
 import '../../core/network/dio_client.dart';
+import '../../core/services/secure_storage_service.dart';
 import '../models/cart_item_model.dart';
 import '../models/order_model.dart';
 
@@ -24,11 +26,21 @@ abstract class IOrderRepository {
 class OrderRepository implements IOrderRepository {
   final DioClient dioClient;
   final SupabaseClient? supabaseClient;
+  final SecureStorageService? secureStorageService;
   final Uuid _uuid = const Uuid();
+  final Dio _gatewayDio = Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 12),
+      receiveTimeout: const Duration(seconds: 12),
+      sendTimeout: const Duration(seconds: 12),
+      headers: {'Accept': 'application/json'},
+    ),
+  );
 
   OrderRepository({
     required this.dioClient,
     this.supabaseClient,
+    this.secureStorageService,
   });
 
   @override
@@ -83,6 +95,9 @@ class OrderRepository implements IOrderRepository {
           deliveredKey = assets['key'];
           deliveredUrl = assets['url'];
           orderStatus = 'completed';
+          if (secureStorageService != null && deliveredKey != null && deliveredKey.isNotEmpty) {
+            await secureStorageService!.saveDeliveredAsset(externalOrderId, deliveredKey, deliveredUrl);
+          }
         }
         isVaultSuccess = true;
       } else {
@@ -261,7 +276,39 @@ class OrderRepository implements IOrderRepository {
           .eq('device_id', deviceId)
           .order('created_at', ascending: false);
 
-      return (res as List).map((json) => OrderModel.fromJson(json)).toList();
+      final list = (res as List).map((json) => OrderModel.fromJson(json)).toList();
+      if (secureStorageService != null) {
+        final mergedList = <OrderModel>[];
+        for (final o in list) {
+          if (o.deliveredKey == null || o.deliveredKey!.isEmpty) {
+            final cached = await secureStorageService!.getDeliveredAsset(o.externalOrderId);
+            if (cached != null && cached['key'] != null && cached['key']!.isNotEmpty) {
+              mergedList.add(o.copyWith(
+                status: 'completed',
+                fulfillmentStatus: 'ready',
+                deliveredKey: cached['key'],
+                deliveredUrl: cached['url'],
+              ));
+              continue;
+            }
+            if (o.id != null) {
+              final cachedById = await secureStorageService!.getDeliveredAsset(o.id.toString());
+              if (cachedById != null && cachedById['key'] != null && cachedById['key']!.isNotEmpty) {
+                mergedList.add(o.copyWith(
+                  status: 'completed',
+                  fulfillmentStatus: 'ready',
+                  deliveredKey: cachedById['key'],
+                  deliveredUrl: cachedById['url'],
+                ));
+                continue;
+              }
+            }
+          }
+          mergedList.add(o);
+        }
+        return mergedList;
+      }
+      return list;
     } catch (_) {
       return [];
     }
@@ -282,68 +329,167 @@ class OrderRepository implements IOrderRepository {
 
   @override
   Future<OrderModel> refreshOrderStatus(OrderModel order) async {
+    // 1. إذا كان الطلب مكتملاً ومفتاحه موجود مسبقاً، لا داعي لإعادة الفحص
+    if (order.deliveredKey != null && order.deliveredKey!.isNotEmpty && order.isReady) {
+      return order;
+    }
+
+    // 2. فحص التخزين المحلي المشفر أولاً
+    if (secureStorageService != null) {
+      final cached = await secureStorageService!.getDeliveredAsset(order.externalOrderId);
+      if (cached != null && cached['key'] != null && cached['key']!.isNotEmpty) {
+        return order.copyWith(
+          status: 'completed',
+          fulfillmentStatus: 'ready',
+          deliveredKey: cached['key'],
+          deliveredUrl: cached['url'],
+        );
+      }
+      if (order.id != null) {
+        final cachedById = await secureStorageService!.getDeliveredAsset(order.id.toString());
+        if (cachedById != null && cachedById['key'] != null && cachedById['key']!.isNotEmpty) {
+          return order.copyWith(
+            status: 'completed',
+            fulfillmentStatus: 'ready',
+            deliveredKey: cachedById['key'],
+            deliveredUrl: cachedById['url'],
+          );
+        }
+      }
+    }
+
     if (order.sellerOrderId == null) return order;
 
+    String fulfillmentStatus = order.fulfillmentStatus;
+    String status = order.status;
+    String? key = order.deliveredKey;
+    String? url = order.deliveredUrl;
+    List<Map<String, dynamic>>? rawAssets;
+
+    // 3. المحاولة الأساسية: عبر بوابة Vercel السحابية (أسرع وأكثر موثوقية وتجاوز حجب الشبكات المحلية)
     try {
-      final response = await dioClient.dio.get('/orders/${order.sellerOrderId}');
-      if (response.statusCode == 200) {
-        final data = response.data['data'];
-        String fulfillmentStatus = data['fulfillment_status'] ?? order.fulfillmentStatus;
-        String status = data['status'] ?? order.status;
-        String? key = order.deliveredKey;
-        String? url = order.deliveredUrl;
-
-        if (fulfillmentStatus == 'ready' && key == null) {
-          final assets = await _consumeDelivery(order.sellerOrderId!);
-          key = assets['key'] as String?;
-          url = assets['url'] as String?;
-          final rawAssets = assets['rawAssets'];
-          status = 'completed';
-
-          // C1 Fix: حفظ المفتاح المستهلك فوراً في Supabase لضمان عدم فقدانه
-          if (supabaseClient != null && key != null) {
-            try {
-              final deliveredAssets = rawAssets is List
-                  ? rawAssets
-                  : [{'type': 'key', 'value': key}];
-              final updateData = {
-                'fulfillment_status': 'ready',
-                'status': 'completed',
-                'delivered_assets': deliveredAssets,
-                'updated_at': DateTime.now().toUtc().toIso8601String(),
-              };
-              if (order.id != null) {
-                await supabaseClient!.from('orders').update(updateData).eq('id', order.id!);
-              } else {
-                await supabaseClient!.from('orders').update(updateData).eq('external_order_id', order.externalOrderId);
+      final gatewayUrl = '${ApiConfig.vercelBackendUrl}/api/orders?seller_order_id=${order.sellerOrderId}&action=consume_key';
+      final res = await _gatewayDio.get(gatewayUrl);
+      if (res.statusCode == 200 && res.data is Map) {
+        final data = res.data['data'];
+        if (data != null && data['assets'] is List) {
+          final assets = data['assets'] as List;
+          if (assets.isNotEmpty) {
+            final keys = <String>[];
+            final raw = <Map<String, dynamic>>[];
+            for (final item in assets) {
+              if (item is Map) {
+                final val = item['value']?.toString() ?? item['key']?.toString();
+                final itemUrl = item['url']?.toString();
+                if (val != null && val.isNotEmpty) keys.add(val);
+                url ??= itemUrl;
+                final assetMap = <String, dynamic>{
+                  'type': item['type']?.toString() ?? 'key',
+                  'value': val ?? '',
+                };
+                if (itemUrl != null) assetMap['url'] = itemUrl;
+                raw.add(assetMap);
               }
-              debugPrint('[OrderRepo] ✅ refreshOrderStatus: saved key to Supabase for order #${order.id ?? order.externalOrderId}');
-            } catch (e) {
-              debugPrint('[OrderRepo] ⚠️ refreshOrderStatus: Supabase update failed: $e');
+            }
+            if (keys.isNotEmpty) {
+              key = keys.join('\n');
+              rawAssets = raw;
+              fulfillmentStatus = 'ready';
+              status = 'completed';
             }
           }
         }
-
-        return OrderModel(
-          id: order.id,
-          externalOrderId: order.externalOrderId,
-          sellerOrderId: order.sellerOrderId,
-          status: status,
-          fulfillmentStatus: fulfillmentStatus,
-          totalCents: order.totalCents,
-          currency: order.currency,
-          deliveredKey: key,
-          deliveredUrl: url,
-          createdAt: order.createdAt,
-          telegramUser: order.telegramUser,
-          contactPhone: order.contactPhone,
-          notes: order.notes,
-          paymentId: order.paymentId,
-        );
       }
     } catch (e) {
-      debugPrint('[OrderRepo] refreshOrderStatus error: $e');
+      debugPrint('[OrderRepo] Gateway consume_key error for #${order.sellerOrderId}: $e');
     }
-    return order;
+
+    // 4. المحاولة الاحتياطية: إذا لم نحصل على المفتاح، الاتصال المباشر بمزود Digital Vault
+    if (key == null || key.isEmpty) {
+      try {
+        final response = await dioClient.dio.get('/orders/${order.sellerOrderId}');
+        if (response.statusCode == 200) {
+          final data = response.data['data'];
+          fulfillmentStatus = data['fulfillment_status'] ?? fulfillmentStatus;
+          status = data['status'] ?? status;
+
+          if (fulfillmentStatus == 'ready') {
+            final assets = await _consumeDelivery(order.sellerOrderId!);
+            if (assets['key'] != null) {
+              key = assets['key'] as String?;
+              url = assets['url'] as String?;
+              rawAssets = assets['rawAssets'] as List<Map<String, dynamic>>?;
+              status = 'completed';
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('[OrderRepo] Direct Digital Vault refresh error for #${order.sellerOrderId}: $e');
+      }
+    }
+
+    // 5. إذا تم جلب المفتاح بنجاح، حفظه محلياً في SecureStorage وتحديث السحابة
+    if (key != null && key.isNotEmpty) {
+      fulfillmentStatus = 'ready';
+      status = 'completed';
+
+      // أ) الحفظ المحلي الفوري المشفر
+      if (secureStorageService != null) {
+        await secureStorageService!.saveDeliveredAsset(order.externalOrderId, key, url);
+        if (order.id != null) {
+          await secureStorageService!.saveDeliveredAsset(order.id.toString(), key, url);
+        }
+      }
+
+      final deliveredAssetsPayload = rawAssets ??
+          key
+              .split('\n')
+              .where((k) => k.isNotEmpty)
+              .map((k) {
+                final m = <String, dynamic>{'type': 'key', 'value': k};
+                if (url != null) m['url'] = url;
+                return m;
+              })
+              .toList();
+
+      // ب) التحديث عبر بوابة Vercel السحابية (لتجاوز أي قيود صلاحيات RLS على Supabase)
+      try {
+        await _gatewayDio.patch(
+          '${ApiConfig.vercelBackendUrl}/api/orders',
+          data: {
+            if (order.id != null) 'id': order.id,
+            'external_order_id': order.externalOrderId,
+            'seller_order_id': order.sellerOrderId,
+            'status': 'completed',
+            'fulfillment_status': 'ready',
+            'delivered_assets': deliveredAssetsPayload,
+          },
+        );
+      } catch (_) {}
+
+      // ج) التحديث المباشر عبر عميل Supabase
+      if (supabaseClient != null) {
+        try {
+          final updateData = {
+            'fulfillment_status': 'ready',
+            'status': 'completed',
+            'delivered_assets': deliveredAssetsPayload,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          };
+          if (order.id != null) {
+            await supabaseClient!.from('orders').update(updateData).eq('id', order.id!);
+          } else {
+            await supabaseClient!.from('orders').update(updateData).eq('external_order_id', order.externalOrderId);
+          }
+        } catch (_) {}
+      }
+    }
+
+    return order.copyWith(
+      status: status,
+      fulfillmentStatus: fulfillmentStatus,
+      deliveredKey: key,
+      deliveredUrl: url,
+    );
   }
 }
