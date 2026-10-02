@@ -25,6 +25,7 @@ class _RegisterPageState extends State<RegisterPage> {
   String _selectedRegion = 'A'; // A: صنعاء, B: عدن
   bool _obscurePin = true;
   bool _obscureConfirmPin = true;
+  bool _isNavigatingToOtp = false;
 
   @override
   void dispose() {
@@ -95,7 +96,8 @@ class _RegisterPageState extends State<RegisterPage> {
         ),
         body: BlocConsumer<AuthCubit, AuthState>(
           listener: (context, state) async {
-            if (state is AuthOtpRequired) {
+            if (state is AuthOtpRequired && !_isNavigatingToOtp) {
+              _isNavigatingToOtp = true;
               final verified = await Navigator.push<bool>(
                 context,
                 MaterialPageRoute(
@@ -106,6 +108,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   ),
                 ),
               );
+              _isNavigatingToOtp = false;
 
               if (verified == true && context.mounted) {
                 Navigator.pop(context, true); // إغلاق شاشة التسجيل بنجاح

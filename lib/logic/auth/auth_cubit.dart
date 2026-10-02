@@ -306,12 +306,10 @@ class AuthCubit extends Cubit<AuthState> {
         return true;
       } else {
         emit(const AuthError('رمز التحقق غير صحيح أو انتهت صلاحيته'));
-        emit(AuthOtpRequired(user: user, phoneWithCode: phoneWithCode));
         return false;
       }
     } catch (e) {
       emit(AuthError('فشل التحقق من الرمز: ${e.toString().replaceAll('Exception: ', '')}'));
-      emit(AuthOtpRequired(user: user, phoneWithCode: phoneWithCode));
       return false;
     }
   }

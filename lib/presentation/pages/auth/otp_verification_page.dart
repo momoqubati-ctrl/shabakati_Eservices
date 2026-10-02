@@ -30,6 +30,7 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
   int _secondsRemaining = 60;
   bool _canResend = false;
   bool _isSending = false;
+  bool _hasError = false;
   String _activeChannel = 'whatsapp';
 
   @override
@@ -37,6 +38,19 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
     super.initState();
     _activeChannel = widget.initialChannel;
     _startCountdown();
+
+    for (int i = 0; i < 4; i++) {
+      _focusNodes[i].addListener(() {
+        if (mounted) setState(() {});
+      });
+    }
+
+    // التركيز التلقائي على الخلية الأولى (اليسار) عند فتح الشاشة
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _focusNodes[0].requestFocus();
+      }
+    });
   }
 
   void _startCountdown() {
@@ -71,6 +85,13 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
 
   String get _enteredCode => _otpControllers.map((c) => c.text).join();
 
+  int get _firstEmptyIndex {
+    for (int i = 0; i < 4; i++) {
+      if (_otpControllers[i].text.isEmpty) return i;
+    }
+    return 3;
+  }
+
   void _submitOtp() {
     final code = _enteredCode;
     if (code.length != 4) {
@@ -91,6 +112,7 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
     setState(() {
       _isSending = true;
       _activeChannel = channel;
+      _hasError = false;
     });
 
     await context.read<AuthCubit>().resendOtp(
@@ -112,6 +134,10 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
         ),
       );
       _startCountdown();
+      for (var c in _otpControllers) {
+        c.clear();
+      }
+      _focusNodes[0].requestFocus();
     }
   }
 
@@ -135,8 +161,28 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
             if (state is AuthSuccess) {
               Navigator.pop(context, true);
             } else if (state is AuthError) {
+              setState(() {
+                _hasError = true;
+              });
+              // تفريغ الحقول وإعادة التركيز للخلية الأولى (اليسار)
+              for (var c in _otpControllers) {
+                c.clear();
+              }
+              _focusNodes[0].requestFocus();
+
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(state.message), backgroundColor: Colors.red.shade700),
+                SnackBar(
+                  content: Row(
+                    children: [
+                      const Icon(Icons.error_outline_rounded, color: Colors.white),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(state.message)),
+                    ],
+                  ),
+                  backgroundColor: Colors.red.shade700,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
               );
             }
           },
@@ -201,69 +247,178 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 36),
+                  const SizedBox(height: 24),
 
-                  // مربعات إدخال الـ OTP الأربعة البارزة والاحترافية
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(4, (index) {
-                      return Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 7),
-                        width: 62,
-                        height: 68,
-                        decoration: BoxDecoration(
-                          color: theme.cardColor,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: _focusNodes[index].hasFocus
-                                ? colorScheme.primary
-                                : colorScheme.outlineVariant.withAlpha(120),
-                            width: _focusNodes[index].hasFocus ? 2.2 : 1.2,
+                  // إشارة واضحة للمستخدم بأن الإدخال يبدأ من اليسار إلى اليمين
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: colorScheme.primary.withAlpha(20),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: colorScheme.primary.withAlpha(60)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.arrow_forward_rounded, size: 16, color: colorScheme.primary),
+                        const SizedBox(width: 8),
+                        Text(
+                          'يبدأ إدخال الأرقام من اليسار إلى اليمين (الخلية الملونة)',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: colorScheme.primary,
                           ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: _focusNodes[index].hasFocus
-                                  ? colorScheme.primary.withAlpha(35)
-                                  : Colors.black.withAlpha(10),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
                         ),
-                        child: Center(
-                          child: TextField(
-                            controller: _otpControllers[index],
-                            focusNode: _focusNodes[index],
-                            keyboardType: TextInputType.number,
-                            textAlign: TextAlign.center,
-                            maxLength: 1,
-                            style: const TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                            decoration: const InputDecoration(
-                              counterText: '',
-                              border: InputBorder.none,
-                            ),
-                            onChanged: (val) {
-                              if (val.isNotEmpty) {
-                                if (index < 3) {
-                                  _focusNodes[index + 1].requestFocus();
-                                } else {
-                                  _focusNodes[index].unfocus();
-                                  _submitOtp();
-                                }
-                              } else {
-                                if (index > 0) {
-                                  _focusNodes[index - 1].requestFocus();
-                                }
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // مربعات إدخال الـ OTP الأربعة - موجهة إجبارياً من اليسار إلى اليمين (LTR)
+                  Directionality(
+                    textDirection: TextDirection.ltr,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(4, (index) {
+                        final isFocused = _focusNodes[index].hasFocus;
+                        final isFilled = _otpControllers[index].text.isNotEmpty;
+                        final hasAnyFocus = _focusNodes.any((f) => f.hasFocus);
+                        // إذا لم يكن أي حقل مركز عليه، تكون الخلية الأولى الفارغة هي المستهدفة
+                        final isTarget = isFocused || (!hasAnyFocus && _firstEmptyIndex == index);
+
+                        Color cellBgColor;
+                        Color cellBorderColor;
+                        double cellBorderWidth;
+
+                        if (_hasError) {
+                          cellBgColor = Colors.red.withAlpha(20);
+                          cellBorderColor = Colors.red.shade600;
+                          cellBorderWidth = isFocused ? 2.5 : 1.5;
+                        } else if (isTarget) {
+                          // تمييز الخلية المستهدفة أو التي يتم ملؤها بلون مختلف تماماً وواضح
+                          cellBgColor = colorScheme.primary.withAlpha(35);
+                          cellBorderColor = colorScheme.primary;
+                          cellBorderWidth = 2.4;
+                        } else if (isFilled) {
+                          cellBgColor = theme.cardColor;
+                          cellBorderColor = colorScheme.primary.withAlpha(140);
+                          cellBorderWidth = 1.6;
+                        } else {
+                          cellBgColor = theme.cardColor;
+                          cellBorderColor = colorScheme.outlineVariant.withAlpha(100);
+                          cellBorderWidth = 1.2;
+                        }
+
+                        return Focus(
+                          onKeyEvent: (node, event) {
+                            if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.backspace) {
+                              if (_otpControllers[index].text.isEmpty && index > 0) {
+                                _otpControllers[index - 1].clear();
+                                _focusNodes[index - 1].requestFocus();
+                                setState(() {});
+                                return KeyEventResult.handled;
                               }
-                            },
+                            }
+                            return KeyEventResult.ignored;
+                          },
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                margin: const EdgeInsets.symmetric(horizontal: 7),
+                                width: 62,
+                                height: 68,
+                                decoration: BoxDecoration(
+                                  color: cellBgColor,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: cellBorderColor,
+                                    width: cellBorderWidth,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: isTarget
+                                          ? (_hasError ? Colors.red.withAlpha(40) : colorScheme.primary.withAlpha(45))
+                                          : Colors.black.withAlpha(8),
+                                      blurRadius: isTarget ? 10 : 4,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: Center(
+                                  child: TextField(
+                                    controller: _otpControllers[index],
+                                    focusNode: _focusNodes[index],
+                                    keyboardType: TextInputType.number,
+                                    textAlign: TextAlign.center,
+                                    maxLength: 1,
+                                    style: TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
+                                      color: _hasError ? Colors.red.shade700 : colorScheme.primary,
+                                    ),
+                                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                    decoration: const InputDecoration(
+                                      counterText: '',
+                                      border: InputBorder.none,
+                                    ),
+                                    onChanged: (val) {
+                                      if (_hasError) {
+                                        setState(() => _hasError = false);
+                                      }
+
+                                      // دعم اللصق المباشر لكامل الكود المكون من 4 أرقام
+                                      if (val.length > 1) {
+                                        final digits = val.replaceAll(RegExp(r'\D'), '');
+                                        for (int i = 0; i < 4 && i < digits.length; i++) {
+                                          _otpControllers[i].text = digits[i];
+                                        }
+                                        if (digits.length >= 4) {
+                                          _focusNodes[3].unfocus();
+                                          _submitOtp();
+                                        } else {
+                                          _focusNodes[digits.length].requestFocus();
+                                        }
+                                        setState(() {});
+                                        return;
+                                      }
+
+                                      if (val.isNotEmpty) {
+                                        if (index < 3) {
+                                          _focusNodes[index + 1].requestFocus();
+                                        } else {
+                                          _focusNodes[index].unfocus();
+                                          _submitOtp();
+                                        }
+                                      } else {
+                                        if (index > 0) {
+                                          _focusNodes[index - 1].requestFocus();
+                                        }
+                                      }
+                                      setState(() {});
+                                    },
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              // مؤشر نقطي يوضح الخلية النشطة حالياً
+                              AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                width: isTarget ? 20 : 6,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: isTarget
+                                      ? (_hasError ? Colors.red : colorScheme.primary)
+                                      : (isFilled ? colorScheme.primary.withAlpha(100) : Colors.transparent),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      );
-                    }),
+                        );
+                      }),
+                    ),
                   ),
                   const SizedBox(height: 32),
 
