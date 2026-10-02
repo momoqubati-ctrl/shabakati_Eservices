@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../core/services/secure_storage_service.dart';
 import '../../core/services/whatsapp_launcher.dart';
+import '../../data/models/user_account_model.dart';
 import '../../logic/auth/auth_cubit.dart';
 import '../../logic/auth/auth_state.dart';
 import '../../logic/cart/cart_cubit.dart';
@@ -15,17 +18,253 @@ class AccountProfilePage extends StatefulWidget {
 
 class _AccountProfilePageState extends State<AccountProfilePage> {
   bool _isBiometricEnabled = false;
+  Duration? _remainingSessionTime;
+  bool _isExtendingSession = false;
 
   @override
   void initState() {
     super.initState();
     _checkBiometrics();
+    _loadSessionInfo();
   }
 
   Future<void> _checkBiometrics() async {
     final isEnabled = await context.read<AuthCubit>().isBiometricEnabled();
     if (mounted) {
       setState(() => _isBiometricEnabled = isEnabled);
+    }
+  }
+
+  Future<void> _loadSessionInfo() async {
+    final storage = context.read<SecureStorageService>();
+    final remaining = await storage.getRemainingSessionTime();
+    if (mounted) {
+      setState(() {
+        _remainingSessionTime = remaining;
+      });
+    }
+  }
+
+  String _formatRemainingTime(Duration? remaining) {
+    if (remaining == null || remaining == Duration.zero) {
+      return 'الجلسة نشطة ومؤمنة';
+    }
+    final hours = remaining.inHours;
+    final minutes = remaining.inMinutes % 60;
+    if (hours > 0) {
+      return 'صالحة لمدة $hours ساعة و $minutes دقيقة';
+    } else {
+      return 'صالحة لمدة $minutes دقيقة';
+    }
+  }
+
+  Future<void> _handleExtendSession(AuthCubit cubit) async {
+    setState(() => _isExtendingSession = true);
+    try {
+      final success = await cubit.extendSessionWithBiometrics();
+      if (success && mounted) {
+        await _loadSessionInfo();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تم تمديد صلاحية الجلسة بنجاح لمدة 4 ساعات إضافية!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isExtendingSession = false);
+      }
+    }
+  }
+
+  Future<String?> _showPinConfirmationDialog(BuildContext context) async {
+    final pinController = TextEditingController();
+    bool obscure = true;
+
+    return await showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return Directionality(
+            textDirection: TextDirection.rtl,
+            child: AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Theme.of(ctx).colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(Icons.fingerprint_rounded, color: Theme.of(ctx).colorScheme.primary),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text('تفعيل الدخول بالبصمة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'أدخل كلمة سر حسابك (4 أرقام) للتأكيد وربط البصمة بأمان بجهازك:',
+                    style: TextStyle(fontSize: 13, height: 1.4),
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: pinController,
+                    keyboardType: TextInputType.number,
+                    obscureText: obscure,
+                    maxLength: 4,
+                    autofocus: true,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: InputDecoration(
+                      hintText: '••••',
+                      counterText: '',
+                      prefixIcon: const Icon(Icons.lock_outline_rounded),
+                      suffixIcon: IconButton(
+                        icon: Icon(obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                        onPressed: () => setDialogState(() => obscure = !obscure),
+                      ),
+                      filled: true,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, null),
+                  child: const Text('إلغاء'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    final pin = pinController.text.trim();
+                    if (pin.length == 4) {
+                      Navigator.pop(ctx, pin);
+                    } else {
+                      ScaffoldMessenger.of(ctx).showSnackBar(
+                        const SnackBar(content: Text('يجب إدخال 4 أرقام لكلمة السر')),
+                      );
+                    }
+                  },
+                  child: const Text('متابعة لمسح البصمة'),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _handleBiometricToggle(bool val, AuthCubit cubit, UserAccountModel user) async {
+    if (val) {
+      // 1. فحص دعم الجهاز
+      final canCheck = await cubit.biometricService.isBiometricAvailable();
+      if (!canCheck) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('جهازك لا يدعم المصادقة الحيوية أو لم يتم إعداد بصمة في إعدادات الهاتف'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      // 2. طلب إدخال رمز PIN للتأكيد
+      if (!mounted) return;
+      final pin = await _showPinConfirmationDialog(context);
+      if (pin == null || pin.isEmpty) return;
+
+      // 3. التحقق من صحة الـ PIN
+      try {
+        await cubit.authRepository.loginUser(
+          accountNumber: user.accountNumber,
+          pin4Digits: pin,
+        );
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('كلمة المرور المدخلة غير صحيحة، تعذر تفعيل البصمة'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      // 4. طلب مسح البصمة الفعلي
+      final authenticated = await cubit.biometricService.authenticateWithBiometrics(
+        reason: 'المصادقة بالبصمة لتفعيل الدخول السريع',
+      );
+
+      if (!authenticated) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('تم إلغاء عملية مسح البصمة'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      // 5. حفظ وتفعيل البصمة محلياً وفي Supabase
+      await cubit.enableBiometrics(user: user, pin4Digits: pin);
+      if (mounted) {
+        setState(() => _isBiometricEnabled = true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تم تفعيل تسجيل الدخول بالبصمة بنجاح!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } else {
+      // إلغاء تفعيل البصمة
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: const Text('إلغاء تفعيل البصمة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          content: const Text(
+            'هل أنت متأكد من رغبتك في إلغاء تسجيل الدخول بالبصمة؟ سيتوجب عليك إدخال كلمة السر عند الدخول.',
+            style: TextStyle(fontSize: 13),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('تراجع'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('تأكيد الإلغاء'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirm == true) {
+        await cubit.disableBiometrics();
+        if (mounted) {
+          setState(() => _isBiometricEnabled = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('تم إلغاء تفعيل البصمة بنجاح'),
+              backgroundColor: Colors.grey,
+            ),
+          );
+        }
+      }
     }
   }
 
@@ -51,6 +290,7 @@ class _AccountProfilePageState extends State<AccountProfilePage> {
                 onLoginSuccess: () {
                   setState(() {});
                   _checkBiometrics();
+                  _loadSessionInfo();
                 },
               );
             }
@@ -128,6 +368,73 @@ class _AccountProfilePageState extends State<AccountProfilePage> {
                 ),
                 const SizedBox(height: 20),
 
+                // بطاقة حالة الجلسة وتمديدها بالبصمة
+                const Text('حالة الجلسة والأمان', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 10),
+
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: theme.cardColor,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: colorScheme.outlineVariant.withAlpha(100)),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withAlpha(25),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.shield_outlined, color: Colors.green, size: 22),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('الجلسة نشطة ومؤمنة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                const SizedBox(height: 2),
+                                Text(
+                                  _formatRemainingTime(_remainingSessionTime),
+                                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_isBiometricEnabled) ...[
+                        const SizedBox(height: 12),
+                        const Divider(height: 1),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            icon: _isExtendingSession
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.fingerprint_rounded, size: 20),
+                            label: const Text('تمديد الجلسة بالبصمة (+4 ساعات)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            onPressed: _isExtendingSession ? null : () => _handleExtendSession(cubit),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+
                 // قسم إعدادات الأمان والبصمة
                 const Text(
                   'الأمان والمصادقة',
@@ -153,18 +460,9 @@ class _AccountProfilePageState extends State<AccountProfilePage> {
                           child: Icon(Icons.fingerprint_rounded, color: colorScheme.primary, size: 22),
                         ),
                         title: const Text('تسجيل الدخول بالبصمة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                        subtitle: const Text('تفعيل المصادقة الحيوية للدخول السريع', style: TextStyle(fontSize: 11)),
+                        subtitle: const Text('تفعيل المصادقة الحيوية للدخول السريع وتمديد الجلسة', style: TextStyle(fontSize: 11)),
                         value: _isBiometricEnabled,
-                        onChanged: (val) async {
-                          if (val) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('يتم تفعيل البصمة تلقائياً عند تسجيل الدخول برقمك السري')),
-                            );
-                          } else {
-                            await cubit.biometricService.setBiometricEnabled(enabled: false);
-                            setState(() => _isBiometricEnabled = false);
-                          }
-                        },
+                        onChanged: (val) => _handleBiometricToggle(val, cubit, user),
                       ),
                     ],
                   ),

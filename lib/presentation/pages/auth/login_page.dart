@@ -24,11 +24,45 @@ class _LoginPageState extends State<LoginPage> {
   CountryCodeModel _selectedCountry = CountryCodes.defaultCountry;
   bool _obscurePin = true;
   bool _hasBiometricEnabled = false;
+  bool _hasAutoPromptedBiometric = false;
 
   @override
   void initState() {
     super.initState();
-    _checkBiometrics();
+    final authState = context.read<AuthCubit>().state;
+    if (authState is AuthSessionExpired) {
+      _fillUserData(authState.user);
+      _hasBiometricEnabled = authState.hasBiometric;
+      if (authState.hasBiometric && !_hasAutoPromptedBiometric) {
+        _hasAutoPromptedBiometric = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _onBiometricLogin();
+          }
+        });
+      }
+    } else {
+      _checkBiometrics();
+    }
+  }
+
+  void _fillUserData(UserAccountModel user) {
+    for (var c in CountryCodes.all) {
+      if (user.accountNumber.startsWith(c.dialCode)) {
+        if (mounted) {
+          setState(() {
+            _selectedCountry = c;
+            _phoneController.text = user.accountNumber.substring(c.dialCode.length);
+          });
+        }
+        return;
+      }
+    }
+    if (mounted) {
+      setState(() {
+        _phoneController.text = user.phoneNational;
+      });
+    }
   }
 
   Future<void> _checkBiometrics() async {
@@ -82,7 +116,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _onBiometricLogin() {
-    context.read<AuthCubit>().loginWithBiometrics();
+    context.read<AuthCubit>().extendSessionWithBiometrics();
   }
 
   void _showError(String message) {
@@ -172,6 +206,17 @@ class _LoginPageState extends State<LoginPage> {
               if (Navigator.canPop(context)) {
                 Navigator.pop(context, true);
               }
+            } else if (state is AuthSessionExpired) {
+              _fillUserData(state.user);
+              setState(() => _hasBiometricEnabled = state.hasBiometric);
+              if (state.hasBiometric && !_hasAutoPromptedBiometric) {
+                _hasAutoPromptedBiometric = true;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) {
+                    _onBiometricLogin();
+                  }
+                });
+              }
             } else if (state is AuthError) {
               _showError(state.message);
             }
@@ -210,10 +255,89 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'سجّل دخولك لمتابعة اشتراكاتك ورصيدك الفوري',
+                        state is AuthSessionExpired
+                            ? 'يرجى تأكيد الهوية لتمديد صلاحية جلستك'
+                            : 'سجّل دخولك لمتابعة اشتراكاتك ورصيدك الفوري',
                         style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                       ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 24),
+
+                      if (state is AuthSessionExpired) ...[
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 20),
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade50,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.amber.shade300),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.shade100,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(Icons.lock_clock_rounded, color: Colors.amber.shade900, size: 22),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'مرحباً بك، ${state.user.fullName}',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                        color: Colors.amber.shade900,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      state.message ?? 'انتهت صلاحية الجلسة، يرجى تأكيد الدخول للمتابعة',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.amber.shade900,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (state.hasBiometric) ...[
+                          SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: FilledButton.tonalIcon(
+                              icon: const Icon(Icons.fingerprint_rounded, size: 24),
+                              label: const Text(
+                                'تمديد الجلسة والمتابعة بالبصمة',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                              ),
+                              style: FilledButton.styleFrom(
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              ),
+                              onPressed: isLoading ? null : _onBiometricLogin,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Expanded(child: Divider(color: colorScheme.outlineVariant.withAlpha(120))),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 10),
+                                child: Text('أو تسجيل الدخول بكلمة السر', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                              ),
+                              Expanded(child: Divider(color: colorScheme.outlineVariant.withAlpha(120))),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                      ],
 
                       // حقل رقم الهاتف (رقم الحساب) المنقسم مع قائمة البحث
                       PhoneInputField(
@@ -313,37 +437,57 @@ class _LoginPageState extends State<LoginPage> {
                           ],
                         ],
                       ),
-                      const SizedBox(height: 24),
-
-                      // زر تسجيل حساب جديد
-                      TextButton(
-                        onPressed: isLoading
-                            ? null
-                            : () async {
-                                final registered = await Navigator.push<bool>(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => const RegisterPage()),
-                                );
-                                if (registered == true) {
-                                  _checkBiometrics();
-                                }
-                              },
-                        child: RichText(
-                          text: TextSpan(
-                            style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
-                            children: [
-                              const TextSpan(text: 'لا يوجد لديك حساب؟ '),
-                              TextSpan(
-                                text: 'تسجيل حساب جديد',
-                                style: TextStyle(
-                                  color: colorScheme.primary,
-                                  fontWeight: FontWeight.bold,
+                      if (state is AuthSessionExpired) ...[
+                        const SizedBox(height: 16),
+                        TextButton.icon(
+                          icon: const Icon(Icons.swap_horiz_rounded, size: 18),
+                          label: const Text(
+                            'تسجيل الدخول بحساب آخر',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          onPressed: isLoading
+                              ? null
+                              : () async {
+                                  _phoneController.clear();
+                                  _pinController.clear();
+                                  await context.read<AuthCubit>().switchUser();
+                                  setState(() {
+                                    _hasBiometricEnabled = false;
+                                  });
+                                },
+                        ),
+                      ] else ...[
+                        const SizedBox(height: 24),
+                        // زر تسجيل حساب جديد
+                        TextButton(
+                          onPressed: isLoading
+                              ? null
+                              : () async {
+                                  final registered = await Navigator.push<bool>(
+                                    context,
+                                    MaterialPageRoute(builder: (_) => const RegisterPage()),
+                                  );
+                                  if (registered == true) {
+                                    _checkBiometrics();
+                                  }
+                                },
+                          child: RichText(
+                            text: TextSpan(
+                              style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+                              children: [
+                                const TextSpan(text: 'لا يوجد لديك حساب؟ '),
+                                TextSpan(
+                                  text: 'تسجيل حساب جديد',
+                                  style: TextStyle(
+                                    color: colorScheme.primary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ),

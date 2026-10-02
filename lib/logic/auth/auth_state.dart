@@ -32,3 +32,15 @@ class AuthError extends AuthState {
   final String message;
   const AuthError(this.message);
 }
+
+class AuthSessionExpired extends AuthState {
+  final UserAccountModel user;
+  final bool hasBiometric;
+  final String? message;
+
+  const AuthSessionExpired({
+    required this.user,
+    this.hasBiometric = false,
+    this.message,
+  });
+}

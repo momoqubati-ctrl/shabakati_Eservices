@@ -32,12 +32,31 @@ class AuthCubit extends Cubit<AuthState> {
   Future<void> restoreSavedSession() async {
     try {
       final savedUser = await secureStorageService.getActiveUser();
-      if (savedUser != null) {
+      if (savedUser == null) {
+        emit(AuthInitial());
+        return;
+      }
+
+      final isSessionValid = await secureStorageService.isSessionValid();
+      final hasBiometric = await biometricService.isBiometricEnabled();
+
+      if (isSessionValid) {
         currentUser = savedUser;
+        // تجديد نشاط الجلسة (Sliding session)
+        await secureStorageService.extendSession();
         emit(AuthSuccess(user: savedUser, isFirstLogin: false));
+      } else {
+        // انتهت صلاحية الجلسة، يتطلب تأكيد الهوية بالبصمة أو كلمة السر
+        currentUser = savedUser;
+        emit(AuthSessionExpired(
+          user: savedUser,
+          hasBiometric: hasBiometric,
+          message: 'انتهت صلاحية الجلسة السابقة، يرجى تأكيد الهوية للمتابعة',
+        ));
       }
     } catch (e) {
       debugPrint('Error restoring saved session: $e');
+      emit(AuthInitial());
     }
   }
 
@@ -124,6 +143,56 @@ class AuthCubit extends Cubit<AuthState> {
     }
   }
 
+  /// تمديد الجلسة وتوثيق الدخول بالبصمة
+  Future<bool> extendSessionWithBiometrics() async {
+    final hasBiometric = await biometricService.isBiometricEnabled();
+    if (!hasBiometric) {
+      emit(const AuthError('البصمة غير مفعلة لهذا الحساب'));
+      return false;
+    }
+
+    final authenticated = await biometricService.authenticateWithBiometrics(
+      reason: 'المصادقة بالبصمة لتمديد صلاحية الجلسة والدخول',
+    );
+
+    if (!authenticated) {
+      return false;
+    }
+
+    emit(const AuthLoading(loadingMessage: 'جاري تمديد الجلسة والدخول الآمن...'));
+    try {
+      final savedAccount = await biometricService.getSavedAccount();
+      final savedHash = await biometricService.getSavedPasswordHash();
+
+      if (savedAccount == null || savedHash == null) {
+        emit(const AuthError('بيانات البصمة غير مكتملة، يرجى الدخول بكلمة المرور'));
+        return false;
+      }
+
+      final user = await authRepository.loginWithStoredHash(
+        accountNumber: savedAccount,
+        passwordHash: savedHash,
+      );
+
+      currentUser = user;
+      await secureStorageService.saveActiveUser(user);
+      await secureStorageService.extendSession();
+      emit(AuthSuccess(user: user, isFirstLogin: false));
+      return true;
+    } catch (e) {
+      emit(AuthError(e.toString().replaceAll('Exception: ', '')));
+      return false;
+    }
+  }
+
+  /// تمديد صلاحية الجلسة الحالية
+  Future<void> extendSession() async {
+    await secureStorageService.extendSession();
+    if (currentUser != null && state is! AuthSuccess) {
+      emit(AuthSuccess(user: currentUser!, isFirstLogin: false));
+    }
+  }
+
   /// حفظ وتفعيل خيار البصمة
   Future<void> enableBiometrics({
     required UserAccountModel user,
@@ -141,6 +210,28 @@ class AuthCubit extends Cubit<AuthState> {
       accountNumber: user.accountNumber,
       enabled: true,
     );
+    currentUser = user.copyWith(biometricEnabled: true);
+    await secureStorageService.saveActiveUser(currentUser!);
+  }
+
+  /// إلغاء تفعيل خيار البصمة ومسح بياناتها محلياً وفي السحابة
+  Future<void> disableBiometrics() async {
+    await biometricService.setBiometricEnabled(enabled: false);
+    if (currentUser != null) {
+      await authRepository.updateBiometricStatus(
+        accountNumber: currentUser!.accountNumber,
+        enabled: false,
+      );
+      currentUser = currentUser!.copyWith(biometricEnabled: false);
+      await secureStorageService.saveActiveUser(currentUser!);
+    }
+  }
+
+  /// التبديل لحساب آخر عند انتهاء الجلسة أو طلب المستخدم
+  Future<void> switchUser() async {
+    await secureStorageService.clearActiveUser();
+    currentUser = null;
+    emit(AuthInitial());
   }
 
   /// تسجيل حساب جديد والتحقق

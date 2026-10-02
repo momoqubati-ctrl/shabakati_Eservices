@@ -48,4 +48,28 @@ class UserAccountModel {
       'biometric_enabled': biometricEnabled,
     };
   }
+
+  UserAccountModel copyWith({
+    int? id,
+    String? accountNumber,
+    String? dialCode,
+    String? phoneNational,
+    String? fullName,
+    String? region,
+    bool? isVerified,
+    bool? biometricEnabled,
+    DateTime? createdAt,
+  }) {
+    return UserAccountModel(
+      id: id ?? this.id,
+      accountNumber: accountNumber ?? this.accountNumber,
+      dialCode: dialCode ?? this.dialCode,
+      phoneNational: phoneNational ?? this.phoneNational,
+      fullName: fullName ?? this.fullName,
+      region: region ?? this.region,
+      isVerified: isVerified ?? this.isVerified,
+      biometricEnabled: biometricEnabled ?? this.biometricEnabled,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
 }
