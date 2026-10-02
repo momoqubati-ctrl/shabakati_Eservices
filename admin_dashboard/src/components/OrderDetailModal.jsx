@@ -35,17 +35,44 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
   const [providerResponse, setProviderResponse] = useState(null);
   const [showRawJson, setShowRawJson] = useState(false);
 
+  // M1: عناصر الطلب (المنتجات المشتراة)
+  const [orderItems, setOrderItems] = useState([]);
+  const [isLoadingItems, setIsLoadingItems] = useState(true);
+
+  // إمكانية تعديل أو استبدال المفتاح
+  const [showEditKey, setShowEditKey] = useState(false);
+
   // واجهة إلغاء وتفشيل الطلب
   const [showCancelForm, setShowCancelForm] = useState(false);
   const [cancelNote, setCancelNote] = useState(
     () => `تم إلغاء الطلب بناءً على رغبة العميل وتم عكس المبلغ ($${(((order?.total_cents || 0) / 100).toFixed(2))} USD) إلى محفظة العميل الإلكترونية بنجاح.`
   );
 
+  // M1: جلب عناصر الطلب عند فتح النافذة
+  React.useEffect(() => {
+    const fetchItems = async () => {
+      if (!order?.id) { setIsLoadingItems(false); return; }
+      try {
+        const { data, error } = await supabase
+          .from('order_items')
+          .select('*')
+          .eq('order_id', order.id);
+        if (!error && data) setOrderItems(data);
+      } catch (_) {}
+      setIsLoadingItems(false);
+    };
+    fetchItems();
+  }, [order?.id]);
+
   if (!currentOrder) return null;
 
   const isReady = currentOrder.fulfillment_status === 'ready' || currentOrder.status === 'completed';
   const isFailed = currentOrder.fulfillment_status === 'failed' || currentOrder.status === 'cancelled';
   const existingKey = currentOrder.delivered_assets?.[0]?.value || currentOrder.delivered_assets?.key || '';
+  // M1: دعم عرض كافة الأصول الرقمية المتعددة
+  const allKeys = Array.isArray(currentOrder.delivered_assets)
+    ? currentOrder.delivered_assets.map(a => a?.value).filter(Boolean)
+    : existingKey ? [existingKey] : [];
 
   const handleCopy = (text) => {
     navigator.clipboard.writeText(text);
@@ -58,7 +85,11 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
     if (!manualKey.trim()) return;
     setIsSubmitting(true);
     try {
-      const deliveredAssets = [{ type: 'key', value: manualKey.trim() }];
+      const keys = manualKey
+        .split('\n')
+        .map(k => k.trim())
+        .filter(Boolean);
+      const deliveredAssets = keys.map(k => ({ type: 'key', value: k }));
       const { error } = await supabase
         .from('orders')
         .update({
@@ -78,7 +109,9 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
         delivered_assets: deliveredAssets
       }));
 
-      setSyncMessage('تم تسليم المفتاح بنجاح وسيتلقاه العميل فوراً عبر Realtime!');
+      setManualKey('');
+      setShowEditKey(false);
+      setSyncMessage('✅ تم تسليم المفتاح بنجاح وسيتلقاه العميل فوراً عبر Realtime!');
       if (onOrderUpdated) onOrderUpdated();
     } catch (err) {
       alert('فشل تحديث الطلب: ' + err.message);
@@ -154,7 +187,7 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
     setIsExecuting(true);
     setSyncMessage(null);
     try {
-      let activeSellerOrderId = currentOrder.seller_order_id;
+      let activeSellerOrderId = currentOrder.seller_order_id || providerResponse?.sellerOrderId;
 
       // أ) إذا لم يكن الطلب منشأ لدى المزود أصلاً، نقوم بإنشائه الآن
       if (!activeSellerOrderId) {
@@ -205,31 +238,39 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
         const tokenRes = await DigitalVaultService.requestDeliveryAccess(activeSellerOrderId);
         if (tokenRes?.success && tokenRes?.data?.access_token) {
           const consumeRes = await DigitalVaultService.consumeDeliveryAccess(tokenRes.data.access_token);
-          const asset = consumeRes?.data?.assets?.[0];
-          if (asset?.value) {
-            const deliveredAssets = [{ type: 'key', value: asset.value }];
-            await supabase
-              .from('orders')
-              .update({
+          const rawAssets = consumeRes?.data?.assets;
+          if (Array.isArray(rawAssets) && rawAssets.length > 0) {
+            const deliveredAssets = rawAssets.map(a => ({
+              type: a.type || 'key',
+              value: a.value || '',
+              ...(a.url ? { url: a.url } : {})
+            })).filter(a => a.value);
+
+            if (deliveredAssets.length > 0) {
+              await supabase
+                .from('orders')
+                .update({
+                  seller_order_id: activeSellerOrderId,
+                  fulfillment_status: 'ready',
+                  status: 'completed',
+                  delivered_assets: deliveredAssets,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', currentOrder.id);
+
+              setCurrentOrder(prev => ({
+                ...prev,
                 seller_order_id: activeSellerOrderId,
                 fulfillment_status: 'ready',
                 status: 'completed',
-                delivered_assets: deliveredAssets,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', currentOrder.id);
+                delivered_assets: deliveredAssets
+              }));
 
-            setCurrentOrder(prev => ({
-              ...prev,
-              seller_order_id: activeSellerOrderId,
-              fulfillment_status: 'ready',
-              status: 'completed',
-              delivered_assets: deliveredAssets
-            }));
-
-            setSyncMessage(`✅ تم تنفيذ الطلب لدى المزود وسحب المفتاح الرقمي بنجاح: ${asset.value}`);
-            if (onOrderUpdated) onOrderUpdated();
-            return;
+              const keysSummary = deliveredAssets.map(a => a.value).join(', ');
+              setSyncMessage(`✅ تم تنفيذ الطلب لدى المزود وسحب المفتاح الرقمي بنجاح (${deliveredAssets.length} عنصر): ${keysSummary}`);
+              if (onOrderUpdated) onOrderUpdated();
+              return;
+            }
           }
         }
       }
@@ -390,7 +431,59 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
                 {currentOrder.device_id || 'غير متوفر'}
               </span>
             </div>
+            {currentOrder.payment_id && (
+              <div className="flex justify-between pt-1 border-t border-slate-200 dark:border-slate-700">
+                <span className="text-slate-500 flex items-center gap-1">
+                  <DollarSign className="w-3 h-3" /> رقم عملية الدفع البنكي:
+                </span>
+                <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-[11px]">
+                  {currentOrder.payment_id}
+                </span>
+              </div>
+            )}
           </div>
+        </div>
+
+        {/* M1: عناصر الطلب (المنتجات المشتراة) */}
+        <div className="space-y-2">
+          <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+            <FileText className="w-4 h-4 text-blue-500" />
+            <span>عناصر الطلب (الخدمات المشتراة):</span>
+          </h4>
+          {isLoadingItems ? (
+            <div className="p-3 text-center text-xs text-slate-400">جارٍ تحميل عناصر الطلب...</div>
+          ) : orderItems.length > 0 ? (
+            <div className="rounded-xl border border-slate-200 dark:border-slate-700/50 overflow-hidden">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-800/60 text-slate-500">
+                    <th className="text-right py-2 px-3 font-medium">المنتج</th>
+                    <th className="text-center py-2 px-3 font-medium">الكمية</th>
+                    <th className="text-left py-2 px-3 font-medium">السعر (USD)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orderItems.map((item, idx) => (
+                    <tr key={idx} className="border-t border-slate-100 dark:border-slate-800">
+                      <td className="py-2 px-3 font-semibold text-slate-800 dark:text-slate-200">
+                        {item.product_name || `منتج #${item.product_id}`}
+                      </td>
+                      <td className="py-2 px-3 text-center text-slate-600 dark:text-slate-300">
+                        {item.quantity || 1}
+                      </td>
+                      <td className="py-2 px-3 text-left font-mono font-bold text-slate-700 dark:text-slate-300">
+                        ${((item.unit_price_cents || 0) / 100).toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="p-3 text-center text-xs text-slate-400 bg-slate-50 dark:bg-slate-800/40 rounded-xl">
+              لا توجد بيانات عناصر مسجلة لهذا الطلب
+            </div>
+          )}
         </div>
 
         {/* بيانات المفتاح المسلم أو إدخال كود جديد */}
@@ -400,25 +493,93 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
             <span>بيانات المفتاح الرقمي / كود التفعيل:</span>
           </h4>
 
-          {existingKey ? (
-            <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between">
-              <span className="font-mono text-xs text-emerald-400 font-bold break-all">
-                {existingKey}
-              </span>
-              <button
-                onClick={() => handleCopy(existingKey)}
-                className="p-2 text-slate-400 hover:text-white rounded-lg transition-colors"
-                title="نسخ"
-              >
-                {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-              </button>
+          {allKeys.length > 0 ? (
+            <div className="space-y-2">
+              {allKeys.length > 1 && (
+                <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
+                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                    تم استلام {allKeys.length} مفاتيح / أكواد رقمية:
+                  </span>
+                  <button
+                    onClick={() => handleCopy(allKeys.join('\n'))}
+                    className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 text-[11px]"
+                  >
+                    <Copy className="w-3 h-3" /> نسخ كافة الأكواد
+                  </button>
+                </div>
+              )}
+
+              {allKeys.map((k, index) => {
+                const isUrl = typeof k === 'string' && (k.startsWith('http://') || k.startsWith('https://'));
+                return (
+                  <div key={index} className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      {allKeys.length > 1 && (
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">
+                          #{index + 1}
+                        </span>
+                      )}
+                      <span className="font-mono text-xs text-emerald-400 font-bold break-all select-all">
+                        {k}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {isUrl && (
+                        <a
+                          href={k}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="p-1.5 text-blue-400 hover:text-blue-300 rounded-lg transition-colors"
+                          title="فتح في المتصفح"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                      <button
+                        onClick={() => handleCopy(k)}
+                        className="p-1.5 text-slate-400 hover:text-white rounded-lg transition-colors"
+                        title="نسخ"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {!isFailed && !showEditKey && (
+                <div className="pt-1">
+                  <button
+                    onClick={() => {
+                      setManualKey(allKeys.join('\n'));
+                      setShowEditKey(true);
+                    }}
+                    className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                  >
+                    <span>تعديل أو استبدال المفتاح المسلّم</span>
+                  </button>
+                </div>
+              )}
             </div>
-          ) : !isFailed ? (
-            <div className="space-y-3">
+          ) : null}
+
+          {(!existingKey || showEditKey) && !isFailed && (
+            <div className="space-y-3 pt-1">
+              {showEditKey && (
+                <div className="flex items-center justify-between text-xs text-amber-600 dark:text-amber-400">
+                  <span>تعديل كود التفعيل (سيتم استبدال الكود الحالي):</span>
+                  <button
+                    onClick={() => setShowEditKey(false)}
+                    className="text-slate-400 hover:text-slate-200"
+                  >
+                    إلغاء التعديل
+                  </button>
+                </div>
+              )}
               <textarea
                 value={manualKey}
                 onChange={(e) => setManualKey(e.target.value)}
-                placeholder="أدخل كود التفعيل أو مفتاح الترخيص أو بيانات الحساب المسلم هنا..."
+                placeholder="أدخل كود التفعيل أو مفتاح الترخيص أو بيانات الحساب المسلم هنا (سطر لكل كود إن وُجد أكثر من كود)..."
                 rows={3}
                 className="w-full text-xs p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
               />
@@ -428,14 +589,14 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
                 className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20"
               >
                 <CheckCircle2 className="w-4 h-4" />
-                <span>تسليم المفتاح وإشعار العميل عبر Realtime</span>
+                <span>{existingKey ? 'تحديث المفتاح وإشعار العميل عبر Realtime' : 'تسليم المفتاح وإشعار العميل عبر Realtime'}</span>
               </button>
             </div>
-          ) : null}
+          )}
         </div>
 
         {/* قسم إدارة الطلب مع مزود الخدمة (Digital Vault) */}
-        {!existingKey && !isFailed && (
+        {!isReady && !isFailed && (
           <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-3">
             <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
               <RefreshCw className="w-4 h-4 text-blue-500" />

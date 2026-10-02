@@ -44,6 +44,7 @@ class OrdersCubit extends Cubit<OrdersState> {
     String? telegramUser,
     String? contactPhone,
     String? contactEmail,
+    String? paymentId,
   }) async {
     emit(OrderSubmitting());
     try {
@@ -58,6 +59,7 @@ class OrdersCubit extends Cubit<OrdersState> {
         telegramUser: telegramUser,
         contactPhone: contactPhone,
         contactEmail: contactEmail,
+        paymentId: paymentId,
       );
 
       final successState = OrderSubmitSuccess(

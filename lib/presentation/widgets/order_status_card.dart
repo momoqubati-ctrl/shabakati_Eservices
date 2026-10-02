@@ -172,7 +172,17 @@ class OrderStatusCard extends StatelessWidget {
                 runSpacing: 8,
                 alignment: WrapAlignment.end,
                 children: [
-                  if (_isUrl(order.deliveredKey))
+                  if (order.deliveredUrl != null && order.deliveredUrl!.isNotEmpty)
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.open_in_browser_rounded, size: 16),
+                      label: const Text('فتح في المتصفح', style: TextStyle(fontSize: 11.5)),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: () => _openBrowser(context, order.deliveredUrl!),
+                    )
+                  else if (_isUrl(order.deliveredKey))
                     OutlinedButton.icon(
                       icon: const Icon(Icons.open_in_browser_rounded, size: 16),
                       label: const Text('فتح في المتصفح', style: TextStyle(fontSize: 11.5)),

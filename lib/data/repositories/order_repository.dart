@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/network/dio_client.dart';
@@ -12,6 +13,7 @@ abstract class IOrderRepository {
     String? telegramUser,
     String? contactPhone,
     String? contactEmail,
+    String? paymentId,
   });
 
   Future<List<OrderModel>> getOrdersByDevice(String deviceId);
@@ -36,6 +38,7 @@ class OrderRepository implements IOrderRepository {
     String? telegramUser,
     String? contactPhone,
     String? contactEmail,
+    String? paymentId,
   }) async {
     final externalOrderId = 'ord_${_uuid.v4().substring(0, 12)}';
     final payloadItems = items.map((e) => {
@@ -110,6 +113,7 @@ class OrderRepository implements IOrderRepository {
       createdAt: DateTime.now(),
       telegramUser: telegramUser,
       contactPhone: contactPhone,
+      paymentId: paymentId,
     );
 
     try {
@@ -121,7 +125,10 @@ class OrderRepository implements IOrderRepository {
         contactPhone: contactPhone,
         contactEmail: contactEmail,
       );
-    } catch (_) {}
+    } catch (e) {
+      // C4 Fix: تسجيل خطأ حفظ Supabase بدلاً من ابتلاعه صامتاً
+      debugPrint('[OrderRepo] ⚠️ Failed to save order to Supabase: $e');
+    }
 
     final bool isInstant = deliveredKey != null && deliveredKey.isNotEmpty;
     final message = isVaultSuccess
@@ -139,7 +146,7 @@ class OrderRepository implements IOrderRepository {
     );
   }
 
-  Future<Map<String, String?>> _consumeDelivery(int sellerOrderId) async {
+  Future<Map<String, dynamic>> _consumeDelivery(int sellerOrderId) async {
     try {
       // طلب access token للتسليم
       final tokenRes = await dioClient.dio.post(
@@ -158,18 +165,33 @@ class OrderRepository implements IOrderRepository {
         if (consumeRes.statusCode == 200) {
           final assets = consumeRes.data['data']['assets'] as List?;
           if (assets != null && assets.isNotEmpty) {
-            final item = assets.first;
+            // C3 Fix: جمع كافة الأصول الرقمية (دعم شراء كمية > 1)
+            final keys = <String>[];
+            String? firstUrl;
+            final rawAssets = <Map<String, dynamic>>[];
+            for (final item in assets) {
+              final val = item['value']?.toString();
+              final itemUrl = item['url']?.toString();
+              if (val != null && val.isNotEmpty) keys.add(val);
+              firstUrl ??= itemUrl;
+              rawAssets.add({
+                'type': item['type']?.toString() ?? 'key',
+                'value': val ?? '',
+              });
+            }
             return {
-              'key': item['value']?.toString(),
-              'url': item['url']?.toString(),
+              'key': keys.isNotEmpty ? keys.join('\n') : null,
+              'url': firstUrl,
+              'rawAssets': rawAssets,
             };
           }
         }
       }
-    } catch (_) {
+    } catch (e) {
       // في حال كان التسليم ما زال قيد التجهيز (409 DELIVERY_NOT_READY)
+      debugPrint('[OrderRepo] _consumeDelivery error for order #$sellerOrderId: $e');
     }
-    return {'key': null, 'url': null};
+    return {'key': null, 'url': null, 'rawAssets': null};
   }
 
   Future<void> _saveOrderToSupabase({
@@ -182,6 +204,13 @@ class OrderRepository implements IOrderRepository {
   }) async {
     if (supabaseClient == null) return;
     try {
+      final deliveredAssets = order.deliveredKey != null
+          ? [
+              for (final k in order.deliveredKey!.split('\n').where((k) => k.isNotEmpty))
+                {'type': 'key', 'value': k},
+            ]
+          : null;
+
       final inserted = await supabaseClient!
           .from('orders')
           .insert({
@@ -196,9 +225,8 @@ class OrderRepository implements IOrderRepository {
             'total_cents': order.totalCents,
             'currency': order.currency,
             'idempotency_key': const Uuid().v4(),
-            'delivered_assets': order.deliveredKey != null
-                ? [{'type': 'key', 'value': order.deliveredKey}]
-                : null,
+            'delivered_assets': deliveredAssets,
+            'payment_id': order.paymentId,
           })
           .select('id')
           .single();
@@ -216,8 +244,10 @@ class OrderRepository implements IOrderRepository {
 
         await supabaseClient!.from('order_items').insert(itemsPayload);
       }
-    } catch (_) {
-      // إكمال العملية دون إيقاف التطبيق في حال عدم توفر اتصال Supabase المباشر
+    } catch (e) {
+      // C4 Fix: تسجيل خطأ إدخال البيانات لتتبع المشاكل دون إيقاف التطبيق
+      debugPrint('[OrderRepo] ⚠️ _saveOrderToSupabase error: $e');
+      rethrow;
     }
   }
 
@@ -265,9 +295,31 @@ class OrderRepository implements IOrderRepository {
 
         if (fulfillmentStatus == 'ready' && key == null) {
           final assets = await _consumeDelivery(order.sellerOrderId!);
-          key = assets['key'];
-          url = assets['url'];
+          key = assets['key'] as String?;
+          url = assets['url'] as String?;
+          final rawAssets = assets['rawAssets'];
           status = 'completed';
+
+          // C1 Fix: حفظ المفتاح المستهلك فوراً في Supabase لضمان عدم فقدانه
+          if (supabaseClient != null && order.id != null && key != null) {
+            try {
+              final deliveredAssets = rawAssets is List
+                  ? rawAssets
+                  : [{'type': 'key', 'value': key}];
+              await supabaseClient!
+                  .from('orders')
+                  .update({
+                    'fulfillment_status': 'ready',
+                    'status': 'completed',
+                    'delivered_assets': deliveredAssets,
+                    'updated_at': DateTime.now().toUtc().toIso8601String(),
+                  })
+                  .eq('id', order.id!);
+              debugPrint('[OrderRepo] ✅ refreshOrderStatus: saved key to Supabase for order #${order.id}');
+            } catch (e) {
+              debugPrint('[OrderRepo] ⚠️ refreshOrderStatus: Supabase update failed: $e');
+            }
+          }
         }
 
         return OrderModel(
@@ -284,9 +336,12 @@ class OrderRepository implements IOrderRepository {
           telegramUser: order.telegramUser,
           contactPhone: order.contactPhone,
           notes: order.notes,
+          paymentId: order.paymentId,
         );
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[OrderRepo] refreshOrderStatus error: $e');
+    }
     return order;
   }
 }

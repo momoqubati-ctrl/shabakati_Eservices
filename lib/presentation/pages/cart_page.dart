@@ -216,6 +216,7 @@ class CartPage extends StatelessWidget {
               items: cartState.items,
               telegramUser: telegramUser,
               contactPhone: effectivePhone,
+              paymentId: paymentResult.paymentId,
             );
 
             if (!context.mounted) return;
@@ -456,7 +457,18 @@ class CartPage extends StatelessWidget {
                     ),
                   ),
                   actions: [
-                    if (_isUrl(order.deliveredKey))
+                    if (order.deliveredUrl != null && order.deliveredUrl!.isNotEmpty)
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.open_in_browser_rounded, size: 16),
+                        label: const Text('فتح في المتصفح'),
+                        onPressed: () async {
+                          final uri = Uri.tryParse(order.deliveredUrl!.trim());
+                          if (uri != null) {
+                            await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          }
+                        },
+                      )
+                    else if (_isUrl(order.deliveredKey))
                       OutlinedButton.icon(
                         icon: const Icon(Icons.open_in_browser_rounded, size: 16),
                         label: const Text('فتح في المتصفح'),
@@ -687,65 +699,35 @@ class CartPage extends StatelessWidget {
           }
         },
         onConfirm: (telegramUser, phone, paymentMethod) async {
-          final ordersCubit = context.read<OrdersCubit>();
-          final cartCubit = context.read<CartCubit>();
-
+          // C2 Fix: خيار الدفع البديل (بطاقة بنكية / تحويل) غير متاح حالياً
+          // لا يتم تنفيذ أي طلب لدى المزود بدون دفع مُتحقق منه
+          if (!context.mounted) return;
           showDialog(
             context: context,
-            barrierDismissible: false,
-            builder: (_) => const Center(child: CircularProgressIndicator()),
-          );
-
-          final result = await ordersCubit.submitOrder(
-            items: cartState.items,
-            telegramUser: telegramUser,
-            contactPhone: phone,
-          );
-
-          if (!context.mounted) return;
-          Navigator.pop(context); // إغلاق مؤشر التحميل
-
-          if (result.isSuccess) {
-            cartCubit.clearCart();
-            ordersCubit.loadOrders();
-
-            showDialog(
-              context: context,
-              builder: (ctx) => Directionality(
-                textDirection: TextDirection.rtl,
-                child: AlertDialog(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                  title: Row(
-                    children: const [
-                      Icon(Icons.check_circle_rounded, color: Colors.green, size: 28),
-                      SizedBox(width: 8),
-                      Text('تم استلام طلبك بنجاح'),
-                    ],
-                  ),
-                  content: Text(
-                    result.message,
-                    style: const TextStyle(fontSize: 14, height: 1.4),
-                  ),
-                  actions: [
-                    FilledButton(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        onNavigateToOrders();
-                      },
-                      child: const Text('عرض طلباتي واشتراكاتي'),
-                    ),
+            builder: (ctx) => Directionality(
+              textDirection: TextDirection.rtl,
+              child: AlertDialog(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                title: Row(
+                  children: const [
+                    Icon(Icons.info_outline_rounded, color: Colors.orange, size: 28),
+                    SizedBox(width: 8),
+                    Expanded(child: Text('طريقة الدفع غير متاحة حالياً', style: TextStyle(fontSize: 16))),
                   ],
                 ),
+                content: const Text(
+                  'خدمة الدفع عبر البطاقة البنكية أو التحويل قيد التفعيل.\n\nيرجى استخدام الدفع عبر المحافظ الإلكترونية (كاش، ون كاش، فلوسك، جوالي) لإتمام عملية الشراء فوراً.',
+                  style: TextStyle(fontSize: 13.5, height: 1.5),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('حسناً'),
+                  ),
+                ],
               ),
-            );
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('فشل في استكمال الطلب: ${result.errorMessage ?? "يرجى المحاولة لاحقاً"}'),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
+            ),
+          );
         },
       ),
     );

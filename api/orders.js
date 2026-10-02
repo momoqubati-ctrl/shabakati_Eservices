@@ -38,12 +38,29 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
+  if (req.method === 'GET') {
+    const { seller_order_id } = req.query || {};
+    if (!seller_order_id) {
+      return res.status(400).json({ success: false, error: 'seller_order_id is required' });
+    }
+    try {
+      const signed = signRequest('GET', `/api/seller/v1/orders/${seller_order_id}`);
+      const providerRes = await fetch(`${BASE_URL}/orders/${seller_order_id}`, {
+        headers: signed.headers
+      });
+      const data = await providerRes.json();
+      return res.status(providerRes.status).json(data);
+    } catch (err) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    const { items, external_order_id, device_id, telegram_user, contact_phone, contact_email } = req.body || {};
+    const { items, external_order_id, device_id, telegram_user, contact_phone, contact_email, payment_id } = req.body || {};
     const externalId = external_order_id || `ord_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
     const orderPayload = {
@@ -71,6 +88,7 @@ export default async function handler(req, res) {
 
     const sellerOrder = providerData.data;
     let deliveredKey = null;
+    let deliveredAssetsList = null;
 
     // 2. إذا كان التسليم فوري
     if (sellerOrder.fulfillment_status === 'ready') {
@@ -91,7 +109,15 @@ export default async function handler(req, res) {
             body: consumeSign.rawBody
           });
           const consumeData = await consumeRes.json();
-          deliveredKey = consumeData?.data?.assets?.[0]?.value || null;
+          const rawAssets = consumeData?.data?.assets;
+          if (Array.isArray(rawAssets) && rawAssets.length > 0) {
+            deliveredAssetsList = rawAssets.map(a => ({
+              type: a.type || 'key',
+              value: a.value || '',
+              ...(a.url ? { url: a.url } : {})
+            })).filter(a => a.value);
+            deliveredKey = deliveredAssetsList.map(a => a.value).join('\n');
+          }
         }
       } catch (_) {}
     }
@@ -110,10 +136,11 @@ export default async function handler(req, res) {
         total_cents: sellerOrder.total?.amount_cents || 0,
         currency: sellerOrder.total?.currency || 'USD',
         idempotency_key: externalId,
-        delivered_assets: deliveredKey ? [{ type: 'key', value: deliveredKey }] : null
+        delivered_assets: deliveredAssetsList || (deliveredKey ? [{ type: 'key', value: deliveredKey }] : null),
+        payment_id: payment_id || null
       };
 
-      await fetch(`${SUPABASE_URL}/rest/v1/orders`, {
+      const supaRes = await fetch(`${SUPABASE_URL}/rest/v1/orders`, {
         method: 'POST',
         headers: {
           'apikey': SUPABASE_ANON,
@@ -123,6 +150,30 @@ export default async function handler(req, res) {
         },
         body: JSON.stringify(orderRecord)
       });
+
+      if (supaRes.ok) {
+        const insertedData = await supaRes.json();
+        const dbOrderId = insertedData?.[0]?.id;
+        if (dbOrderId && Array.isArray(items) && items.length > 0) {
+          const itemsPayload = items.map(it => ({
+            order_id: dbOrderId,
+            product_id: it.product_id || it.product?.id,
+            product_name: it.product_name || it.product?.name || `منتج #${it.product_id || it.product?.id}`,
+            quantity: it.quantity || 1,
+            unit_price_cents: it.unit_price_cents || 0,
+            currency: it.currency || 'USD'
+          }));
+          await fetch(`${SUPABASE_URL}/rest/v1/order_items`, {
+            method: 'POST',
+            headers: {
+              'apikey': SUPABASE_ANON,
+              'Authorization': `Bearer ${SUPABASE_ANON}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(itemsPayload)
+          });
+        }
+      }
     } catch (_) {}
 
     return res.status(201).json({
@@ -130,6 +181,7 @@ export default async function handler(req, res) {
       data: {
         ...sellerOrder,
         delivered_key: deliveredKey,
+        delivered_assets: deliveredAssetsList,
         is_ready: !!deliveredKey
       }
     });

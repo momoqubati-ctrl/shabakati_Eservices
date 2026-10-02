@@ -13,6 +13,7 @@ class OrderModel {
   final String? telegramUser;
   final String? contactPhone;
   final String? notes;
+  final String? paymentId;
 
   OrderModel({
     this.id,
@@ -28,6 +29,7 @@ class OrderModel {
     this.telegramUser,
     this.contactPhone,
     this.notes,
+    this.paymentId,
   });
 
   bool get isReady => fulfillmentStatus == 'ready' || status == 'completed';
@@ -67,11 +69,18 @@ class OrderModel {
     if (json['delivered_assets'] != null) {
       final assets = json['delivered_assets'];
       if (assets is List && assets.isNotEmpty) {
-        final first = assets.first;
-        if (first is Map) {
-          key = first['value']?.toString();
-          url = first['url']?.toString();
+        // C3 Fix: دعم كافة الأصول الرقمية عند شراء كمية أكبر من 1
+        final keys = <String>[];
+        String? firstUrl;
+        for (final asset in assets) {
+          if (asset is Map) {
+            final val = asset['value']?.toString();
+            if (val != null && val.isNotEmpty) keys.add(val);
+            firstUrl ??= asset['url']?.toString();
+          }
         }
+        key = keys.isNotEmpty ? keys.join('\n') : null;
+        url = firstUrl;
       } else if (assets is Map) {
         key = assets['key'] ?? assets['value'];
         url = assets['url'];
@@ -97,6 +106,7 @@ class OrderModel {
       telegramUser: json['telegram_user']?.toString(),
       contactPhone: json['contact_phone']?.toString(),
       notes: json['notes']?.toString() ?? json['failure_reason']?.toString(),
+      paymentId: json['payment_id']?.toString(),
     );
   }
 
@@ -113,7 +123,13 @@ class OrderModel {
       'total_cents': totalCents,
       'currency': currency,
       'idempotency_key': externalOrderId, // Use stable order uuid
-      'delivered_assets': deliveredKey != null ? [{'type': 'key', 'value': deliveredKey}] : null,
+      'delivered_assets': deliveredKey != null
+          ? [
+              for (final k in deliveredKey!.split('\n').where((k) => k.isNotEmpty))
+                {'type': 'key', 'value': k},
+            ]
+          : null,
+      'payment_id': paymentId,
       'notes': notes,
       'created_at': createdAt.toIso8601String(),
       'updated_at': DateTime.now().toUtc().toIso8601String(),
