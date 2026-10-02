@@ -74,9 +74,11 @@ class OrderModel {
         String? firstUrl;
         for (final asset in assets) {
           if (asset is Map) {
-            final val = asset['value']?.toString();
+            final val = asset['value']?.toString() ?? asset['key']?.toString();
             if (val != null && val.isNotEmpty) keys.add(val);
             firstUrl ??= asset['url']?.toString();
+          } else if (asset is String && asset.isNotEmpty) {
+            keys.add(asset);
           }
         }
         key = keys.isNotEmpty ? keys.join('\n') : null;

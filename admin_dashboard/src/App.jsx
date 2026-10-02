@@ -225,9 +225,11 @@ export function App() {
         <OrderDetailModal
           order={selectedOrder}
           onClose={() => setSelectedOrder(null)}
-          onOrderUpdated={() => {
+          onOrderUpdated={(updated) => {
             fetchOrders();
-            setSelectedOrder(null);
+            if (updated) {
+              setSelectedOrder(updated);
+            }
           }}
         />
       )}

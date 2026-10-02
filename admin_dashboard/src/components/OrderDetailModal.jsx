@@ -64,15 +64,19 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
     fetchItems();
   }, [order?.id]);
 
+  React.useEffect(() => {
+    if (order) setCurrentOrder(order);
+  }, [order]);
+
   if (!currentOrder) return null;
 
-  const isReady = currentOrder.fulfillment_status === 'ready' || currentOrder.status === 'completed';
-  const isFailed = currentOrder.fulfillment_status === 'failed' || currentOrder.status === 'cancelled';
-  const existingKey = currentOrder.delivered_assets?.[0]?.value || currentOrder.delivered_assets?.key || '';
-  // M1: دعم عرض كافة الأصول الرقمية المتعددة
+  // استخراج كافة المفاتيح الرقمية أياً كان شكل التخزين
   const allKeys = Array.isArray(currentOrder.delivered_assets)
-    ? currentOrder.delivered_assets.map(a => a?.value).filter(Boolean)
-    : existingKey ? [existingKey] : [];
+    ? currentOrder.delivered_assets.map(a => a?.value || a?.key || (typeof a === 'string' ? a : '')).filter(Boolean)
+    : (typeof currentOrder.delivered_assets === 'string' && currentOrder.delivered_assets ? [currentOrder.delivered_assets] : []);
+  const existingKey = allKeys.length > 0 ? allKeys[0] : (currentOrder.delivered_assets?.[0]?.value || currentOrder.delivered_assets?.key || '');
+  const isReady = currentOrder.fulfillment_status === 'ready' || currentOrder.status === 'completed' || allKeys.length > 0;
+  const isFailed = currentOrder.fulfillment_status === 'failed' || currentOrder.status === 'cancelled';
 
   const handleCopy = (text) => {
     navigator.clipboard.writeText(text);
@@ -90,29 +94,37 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
         .map(k => k.trim())
         .filter(Boolean);
       const deliveredAssets = keys.map(k => ({ type: 'key', value: k }));
-      const { error } = await supabase
+
+      let updateQuery = supabase
         .from('orders')
         .update({
           fulfillment_status: 'ready',
           status: 'completed',
           delivered_assets: deliveredAssets,
           updated_at: new Date().toISOString()
-        })
-        .eq('id', currentOrder.id);
+        });
 
+      if (currentOrder.id) {
+        updateQuery = updateQuery.eq('id', currentOrder.id);
+      } else if (currentOrder.external_order_id) {
+        updateQuery = updateQuery.eq('external_order_id', currentOrder.external_order_id);
+      }
+
+      const { error } = await updateQuery;
       if (error) throw error;
 
-      setCurrentOrder(prev => ({
-        ...prev,
+      const updated = {
+        ...currentOrder,
         fulfillment_status: 'ready',
         status: 'completed',
         delivered_assets: deliveredAssets
-      }));
+      };
 
+      setCurrentOrder(updated);
       setManualKey('');
       setShowEditKey(false);
-      setSyncMessage('✅ تم تسليم المفتاح بنجاح وسيتلقاه العميل فوراً عبر Realtime!');
-      if (onOrderUpdated) onOrderUpdated();
+      setSyncMessage('✅ تم تسليم المفتاح بنجاح وتحديث حالة الطلب إلى (مكتمل) وإشعار العميل فوراً في تطبيقه عبر Realtime!');
+      if (onOrderUpdated) onOrderUpdated(updated);
     } catch (err) {
       alert('فشل تحديث الطلب: ' + err.message);
     } finally {
@@ -120,19 +132,17 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
     }
   };
 
-  // 1. زر فحص حالة العملية فقط لدى المزود (Read-only check بدون تنفيذ)
+  // 1. زر فحص حالة العملية لدى المزود والتحديث الآلي الذكي إذا كانت جاهزة
   const handleCheckProviderStatus = async () => {
     setIsCheckingStatus(true);
     setSyncMessage(null);
     setProviderResponse(null);
     try {
-      if (currentOrder.seller_order_id) {
-        const res = await DigitalVaultService.getSellerOrder(currentOrder.seller_order_id);
-        setProviderResponse({
-          type: 'order_status',
-          sellerOrderId: currentOrder.seller_order_id,
-          ...res
-        });
+      let activeSellerOrderId = currentOrder.seller_order_id;
+      let orderData = null;
+
+      if (activeSellerOrderId) {
+        orderData = await DigitalVaultService.getSellerOrder(activeSellerOrderId);
       } else {
         // إذا لم يكن رقم المزود مسجلاً، نبحث برقم external_order_id في قائمة طلبات المزود
         const listRes = await DigitalVaultService.getOrders(50);
@@ -144,22 +154,20 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
         }
 
         if (matched) {
-          setProviderResponse({
-            type: 'order_status',
-            sellerOrderId: matched.id,
-            matchedExternal: true,
+          activeSellerOrderId = matched.id;
+          orderData = {
             success: true,
             httpStatus: 200,
             data: matched,
             rawText: JSON.stringify(matched, null, 2)
-          });
+          };
         } else {
           setProviderResponse({
             type: 'not_found_at_provider',
             success: false,
             notCreated: true,
             httpStatus: 404,
-            message: 'الطلب غير منشأ لدى مزود الخدمة حتى الآن (لا يوجد رقم طلب للمزود seller_order_id). العملية حالياً غير منفذة لدى المزود.',
+            message: 'الطلب غير منشأ لدى مزود الخدمة حتى الآن. العملية حالياً غير منفذة لدى المزود.',
             rawText: JSON.stringify({
               status: 'NOT_FOUND_OR_NOT_CREATED',
               external_order_id: currentOrder.external_order_id,
@@ -168,6 +176,84 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
               message: 'الطلب غير مسجل لدى المزود حتى اللحظة، ويمكن تنفيذه عبر زر "تنفيذ العملية لدى المزود" أدناه.'
             }, null, 2)
           });
+          return;
+        }
+      }
+
+      setProviderResponse({
+        type: 'order_status',
+        sellerOrderId: activeSellerOrderId,
+        ...orderData
+      });
+
+      // التحقق الذكي والتلقائي: إذا كانت العملية منفذة لدى المزود (ready أو completed)
+      const pFulfillment = orderData?.data?.fulfillment_status;
+      const pStatus = orderData?.data?.status;
+      const isProviderReady = pFulfillment === 'ready' || pStatus === 'completed';
+
+      if (isProviderReady && activeSellerOrderId) {
+        let deliveredAssets = currentOrder.delivered_assets;
+        let hasKeys = Array.isArray(deliveredAssets) && deliveredAssets.some(a => a?.value || a?.key);
+
+        // إذا لم يكن المفتاح مسحوباً ومحفوظاً لدينا بعد، نقوم بطلب وسحب المفتاح الرقمي من المزود فوراً
+        if (!hasKeys) {
+          try {
+            const tokenRes = await DigitalVaultService.requestDeliveryAccess(activeSellerOrderId);
+            if (tokenRes?.success && tokenRes?.data?.access_token) {
+              const consumeRes = await DigitalVaultService.consumeDeliveryAccess(tokenRes.data.access_token);
+              const rawAssets = consumeRes?.data?.assets;
+              if (Array.isArray(rawAssets) && rawAssets.length > 0) {
+                deliveredAssets = rawAssets.map(a => ({
+                  type: a.type || 'key',
+                  value: a.value || '',
+                  ...(a.url ? { url: a.url } : {})
+                })).filter(a => a.value);
+                hasKeys = deliveredAssets.length > 0;
+              }
+            }
+          } catch (consumeErr) {
+            console.warn('Auto consume delivery on check error:', consumeErr);
+          }
+        }
+
+        // تحديث قاعدة بيانات Supabase وتغيير حالة الطلب إلى مكتمل وحفظ الأكواد المسحوبة
+        const updatePayload = {
+          seller_order_id: activeSellerOrderId,
+          fulfillment_status: 'ready',
+          status: 'completed',
+          updated_at: new Date().toISOString()
+        };
+        if (hasKeys && deliveredAssets) {
+          updatePayload.delivered_assets = deliveredAssets;
+        }
+
+        let updateQuery = supabase.from('orders').update(updatePayload);
+        if (currentOrder.id) {
+          updateQuery = updateQuery.eq('id', currentOrder.id);
+        } else if (currentOrder.external_order_id) {
+          updateQuery = updateQuery.eq('external_order_id', currentOrder.external_order_id);
+        }
+
+        const { error: supaErr } = await updateQuery;
+        if (!supaErr) {
+          const updated = {
+            ...currentOrder,
+            seller_order_id: activeSellerOrderId,
+            fulfillment_status: 'ready',
+            status: 'completed',
+            ...(hasKeys ? { delivered_assets: deliveredAssets } : {})
+          };
+
+          setCurrentOrder(updated);
+
+          if (hasKeys) {
+            const keysSummary = deliveredAssets.map(a => a.value).join(', ');
+            setSyncMessage(`✅ العملية منفذة لدى المزود! تم سحب وحفظ المفتاح الرقمي وتحديث حالة الطلب إلى (مكتمل) وإشعار العميل فوراً: ${keysSummary}`);
+          } else {
+            setSyncMessage(`✅ تم تأكيد تنفيذ العملية لدى المزود، وتم تحديث حالة الطلب إلى (مكتمل). يمكنك إدخال المفتاح يدوياً في حقل المفتاح لتسليمه للعميل فوراً.`);
+          }
+
+          if (onOrderUpdated) onOrderUpdated(updated);
         }
       }
     } catch (err) {

@@ -301,21 +301,23 @@ class OrderRepository implements IOrderRepository {
           status = 'completed';
 
           // C1 Fix: حفظ المفتاح المستهلك فوراً في Supabase لضمان عدم فقدانه
-          if (supabaseClient != null && order.id != null && key != null) {
+          if (supabaseClient != null && key != null) {
             try {
               final deliveredAssets = rawAssets is List
                   ? rawAssets
                   : [{'type': 'key', 'value': key}];
-              await supabaseClient!
-                  .from('orders')
-                  .update({
-                    'fulfillment_status': 'ready',
-                    'status': 'completed',
-                    'delivered_assets': deliveredAssets,
-                    'updated_at': DateTime.now().toUtc().toIso8601String(),
-                  })
-                  .eq('id', order.id!);
-              debugPrint('[OrderRepo] ✅ refreshOrderStatus: saved key to Supabase for order #${order.id}');
+              final updateData = {
+                'fulfillment_status': 'ready',
+                'status': 'completed',
+                'delivered_assets': deliveredAssets,
+                'updated_at': DateTime.now().toUtc().toIso8601String(),
+              };
+              if (order.id != null) {
+                await supabaseClient!.from('orders').update(updateData).eq('id', order.id!);
+              } else {
+                await supabaseClient!.from('orders').update(updateData).eq('external_order_id', order.externalOrderId);
+              }
+              debugPrint('[OrderRepo] ✅ refreshOrderStatus: saved key to Supabase for order #${order.id ?? order.externalOrderId}');
             } catch (e) {
               debugPrint('[OrderRepo] ⚠️ refreshOrderStatus: Supabase update failed: $e');
             }
