@@ -40,10 +40,37 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'GET') {
-    const { seller_order_id } = req.query || {};
+    const { seller_order_id, action } = req.query || {};
     if (!seller_order_id) {
       return res.status(400).json({ success: false, error: 'seller_order_id is required' });
     }
+
+    if (action === 'consume_key' || action === 'delivery_access') {
+      try {
+        const tokenSign = signRequest('POST', `/api/seller/v1/orders/${seller_order_id}/delivery-access`, {});
+        tokenSign.headers['Idempotency-Key'] = crypto.randomUUID();
+        const tokRes = await fetch(`${BASE_URL}/orders/${seller_order_id}/delivery-access`, {
+          method: 'POST',
+          headers: tokenSign.headers,
+          body: '{}'
+        });
+        const tokData = await tokRes.json();
+        if (tokData?.data?.access_token) {
+          const consumeSign = signRequest('POST', '/api/seller/v1/delivery-access/consume', { access_token: tokData.data.access_token });
+          const consumeRes = await fetch(`${BASE_URL}/delivery-access/consume`, {
+            method: 'POST',
+            headers: consumeSign.headers,
+            body: consumeSign.rawBody
+          });
+          const consumeData = await consumeRes.json();
+          return res.status(consumeRes.status).json(consumeData);
+        }
+        return res.status(tokRes.status).json(tokData);
+      } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+      }
+    }
+
     try {
       const signed = signRequest('GET', `/api/seller/v1/orders/${seller_order_id}`);
       const providerRes = await fetch(`${BASE_URL}/orders/${seller_order_id}`, {

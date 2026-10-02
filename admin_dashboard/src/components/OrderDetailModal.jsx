@@ -84,6 +84,101 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // سحب واستخراج المفتاح الرقمي آلياً من المزود وتعبئته مباشرة في الحقل
+  const handleAutoFetchKeyFromProvider = async () => {
+    const activeSellerOrderId = currentOrder.seller_order_id;
+    if (!activeSellerOrderId) {
+      alert('لا يوجد رقم طلب مسجل لدى المزود لهذا الطلب');
+      return;
+    }
+    setIsCheckingStatus(true);
+    setSyncMessage('⏳ جاري استخراج وسحب المفتاح الرقمي من المزود آلياً...');
+    try {
+      let deliveredAssets = null;
+
+      // محاولة 1: عبر خادم الباك إند /api/orders?action=consume_key
+      try {
+        const apiRes = await fetch(`/api/orders?action=consume_key&seller_order_id=${activeSellerOrderId}`);
+        if (apiRes.ok) {
+          const apiData = await apiRes.json();
+          const rawAssets = apiData?.data?.assets;
+          if (Array.isArray(rawAssets) && rawAssets.length > 0) {
+            deliveredAssets = rawAssets.map(a => ({
+              type: a.type || 'key',
+              value: a.value || '',
+              ...(a.url ? { url: a.url } : {})
+            })).filter(a => a.value);
+          }
+        }
+      } catch (_) {}
+
+      // محاولة 2: عبر الاتصال المباشر بمزود Digital Vault
+      if (!deliveredAssets || deliveredAssets.length === 0) {
+        const tokenRes = await DigitalVaultService.requestDeliveryAccess(activeSellerOrderId);
+        if (tokenRes?.success && tokenRes?.data?.access_token) {
+          const consumeRes = await DigitalVaultService.consumeDeliveryAccess(tokenRes.data.access_token);
+          const rawAssets = consumeRes?.data?.assets;
+          if (Array.isArray(rawAssets) && rawAssets.length > 0) {
+            deliveredAssets = rawAssets.map(a => ({
+              type: a.type || 'key',
+              value: a.value || '',
+              ...(a.url ? { url: a.url } : {})
+            })).filter(a => a.value);
+          }
+        }
+      }
+
+      if (deliveredAssets && deliveredAssets.length > 0) {
+        const keyText = deliveredAssets.map(a => a.value).join('\n');
+        setManualKey(keyText); // تعبئة حقل المفتاح آلياً وفوراً
+
+        const updatePayload = {
+          fulfillment_status: 'ready',
+          status: 'completed',
+          delivered_assets: deliveredAssets,
+          updated_at: new Date().toISOString()
+        };
+
+        try {
+          let updateQuery = supabase.from('orders').update(updatePayload);
+          if (currentOrder.id) {
+            updateQuery = updateQuery.eq('id', currentOrder.id);
+          } else if (currentOrder.external_order_id) {
+            updateQuery = updateQuery.eq('external_order_id', currentOrder.external_order_id);
+          }
+          await updateQuery;
+        } catch (_) {}
+
+        try {
+          await fetch('/api/orders', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: currentOrder.id,
+              external_order_id: currentOrder.external_order_id,
+              ...updatePayload
+            })
+          });
+        } catch (_) {}
+
+        const updated = {
+          ...currentOrder,
+          ...updatePayload
+        };
+
+        setCurrentOrder(updated);
+        setSyncMessage(`✅ تم سحب المفتاح الرقمي بنجاح وتعبئته وتحديث حالة الطلب: ${keyText}`);
+        if (onOrderUpdated) onOrderUpdated(updated);
+      } else {
+        setSyncMessage('⚠️ تم الاتصال بالمزود ولكن لم يتم العثور على مفاتيح جاهزة بعد.');
+      }
+    } catch (err) {
+      setSyncMessage('❌ تعذر سحب المفتاح من المزود: ' + err.message);
+    } finally {
+      setIsCheckingStatus(false);
+    }
+  };
+
   // تسليم الكود وتحديث الطلب يدوياً في Supabase Realtime
   const handleDeliverManualKey = async () => {
     if (!manualKey.trim()) return;
@@ -206,11 +301,12 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
 
         // إذا لم يكن المفتاح مسحوباً ومحفوظاً لدينا بعد، نقوم بطلب وسحب المفتاح الرقمي من المزود فوراً
         if (!hasKeys) {
+          // محاولة 1: عبر الباك إند API
           try {
-            const tokenRes = await DigitalVaultService.requestDeliveryAccess(activeSellerOrderId);
-            if (tokenRes?.success && tokenRes?.data?.access_token) {
-              const consumeRes = await DigitalVaultService.consumeDeliveryAccess(tokenRes.data.access_token);
-              const rawAssets = consumeRes?.data?.assets;
+            const apiRes = await fetch(`/api/orders?action=consume_key&seller_order_id=${activeSellerOrderId}`);
+            if (apiRes.ok) {
+              const apiData = await apiRes.json();
+              const rawAssets = apiData?.data?.assets;
               if (Array.isArray(rawAssets) && rawAssets.length > 0) {
                 deliveredAssets = rawAssets.map(a => ({
                   type: a.type || 'key',
@@ -220,8 +316,27 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
                 hasKeys = deliveredAssets.length > 0;
               }
             }
-          } catch (consumeErr) {
-            console.warn('Auto consume delivery on check error:', consumeErr);
+          } catch (_) {}
+
+          // محاولة 2: الاتصال المباشر
+          if (!hasKeys) {
+            try {
+              const tokenRes = await DigitalVaultService.requestDeliveryAccess(activeSellerOrderId);
+              if (tokenRes?.success && tokenRes?.data?.access_token) {
+                const consumeRes = await DigitalVaultService.consumeDeliveryAccess(tokenRes.data.access_token);
+                const rawAssets = consumeRes?.data?.assets;
+                if (Array.isArray(rawAssets) && rawAssets.length > 0) {
+                  deliveredAssets = rawAssets.map(a => ({
+                    type: a.type || 'key',
+                    value: a.value || '',
+                    ...(a.url ? { url: a.url } : {})
+                  })).filter(a => a.value);
+                  hasKeys = deliveredAssets.length > 0;
+                }
+              }
+            } catch (consumeErr) {
+              console.warn('Auto consume delivery on check error:', consumeErr);
+            }
           }
         }
 
@@ -234,6 +349,8 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
         };
         if (hasKeys && deliveredAssets) {
           updatePayload.delivered_assets = deliveredAssets;
+          const keyText = deliveredAssets.map(a => a.value).join('\n');
+          setManualKey(keyText); // تعبئة حقل المفتاح آلياً وفوراً
         }
 
         try {
@@ -270,9 +387,9 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
 
         if (hasKeys) {
           const keysSummary = deliveredAssets.map(a => a.value).join(', ');
-          setSyncMessage(`✅ العملية منفذة لدى المزود! تم سحب وحفظ المفتاح الرقمي وتحديث حالة الطلب إلى (مكتمل) وإشعار العميل فوراً: ${keysSummary}`);
+          setSyncMessage(`✅ العملية منفذة لدى المزود! تم استخراج وسحب المفتاح الرقمي وتعبئته آلياً وتحديث الطلب بنجاح: ${keysSummary}`);
         } else {
-          setSyncMessage(`✅ تم تأكيد تنفيذ العملية لدى المزود، وتم تحديث حالة الطلب إلى (مكتمل). يمكنك إدخال المفتاح يدوياً في حقل المفتاح لتسليمه للعميل فوراً.`);
+          setSyncMessage(`✅ تم تأكيد تنفيذ العملية لدى المزود، وتم تحديث حالة الطلب إلى (مكتمل). يمكنك الضغط على "سحب وتعبئة المفتاح آلياً" أو إدخاله يدوياً.`);
         }
 
         if (onOrderUpdated) onOrderUpdated(updated);
@@ -700,23 +817,40 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
 
           {(!existingKey || showEditKey) && !isFailed && (
             <div className="space-y-3 pt-1">
-              {showEditKey && (
-                <div className="flex items-center justify-between text-xs text-amber-600 dark:text-amber-400">
-                  <span>تعديل كود التفعيل (سيتم استبدال الكود الحالي):</span>
-                  <button
-                    onClick={() => setShowEditKey(false)}
-                    className="text-slate-400 hover:text-slate-200"
-                  >
-                    إلغاء التعديل
-                  </button>
-                </div>
-              )}
+              <div className="flex items-center justify-between">
+                {showEditKey ? (
+                  <div className="flex items-center justify-between text-xs text-amber-600 dark:text-amber-400 w-full">
+                    <span>تعديل كود التفعيل (سيتم استبدال الكود الحالي):</span>
+                    <button
+                      onClick={() => setShowEditKey(false)}
+                      className="text-slate-400 hover:text-slate-200"
+                    >
+                      إلغاء التعديل
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <span className="text-xs text-slate-500">حقل كود / رابط التفعيل للعميل:</span>
+                    {currentOrder.seller_order_id && (
+                      <button
+                        type="button"
+                        onClick={handleAutoFetchKeyFromProvider}
+                        disabled={isCheckingStatus}
+                        className="text-[11px] text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-bold flex items-center gap-1.5 py-1 px-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-900 transition-colors"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${isCheckingStatus ? 'animate-spin' : ''}`} />
+                        <span>سحب وتعبئة المفتاح آلياً من المزود</span>
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
               <textarea
                 value={manualKey}
                 onChange={(e) => setManualKey(e.target.value)}
                 placeholder="أدخل كود التفعيل أو مفتاح الترخيص أو بيانات الحساب المسلم هنا (سطر لكل كود إن وُجد أكثر من كود)..."
                 rows={3}
-                className="w-full text-xs p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                className="w-full text-xs p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 font-mono"
               />
               <button
                 onClick={handleDeliverManualKey}
@@ -731,7 +865,7 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
         </div>
 
         {/* قسم إدارة الطلب مع مزود الخدمة (Digital Vault) */}
-        {!isReady && !isFailed && (
+        {(!isReady || allKeys.length === 0) && !isFailed && (
           <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-3">
             <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
               <RefreshCw className="w-4 h-4 text-blue-500" />
