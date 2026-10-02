@@ -6,10 +6,17 @@ import {
   Layers, 
   Wallet, 
   ExternalLink,
-  ShieldCheck
+  ShieldCheck,
+  X
 } from 'lucide-react';
 
-export const Sidebar = ({ activeTab, setActiveTab, pendingOrdersCount = 0 }) => {
+export const Sidebar = ({ 
+  activeTab, 
+  setActiveTab, 
+  pendingOrdersCount = 0,
+  isOpen = false,
+  onClose
+}) => {
   const navItems = [
     { id: 'dashboard', label: 'لوحة المؤشرات العامة', icon: LayoutDashboard },
     { 
@@ -23,19 +30,38 @@ export const Sidebar = ({ activeTab, setActiveTab, pendingOrdersCount = 0 }) => 
   ];
 
   return (
-    <aside className="w-64 bg-slate-900 text-slate-100 flex flex-col border-l border-slate-800 shadow-xl min-h-screen">
-      {/* رأس القائمة */}
-      <div className="p-6 border-b border-slate-800 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-500/30">
-            <ShieldCheck className="w-6 h-6" />
+    <>
+      {/* خلفية معتمة عند فتح القائمة في الموبايل */}
+      {isOpen && (
+        <div 
+          onClick={onClose}
+          className="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-sm lg:hidden transition-opacity duration-300"
+        />
+      )}
+
+      <aside className={`fixed lg:static top-0 bottom-0 right-0 z-50 w-72 lg:w-64 bg-slate-900 text-slate-100 flex flex-col border-l border-slate-800 shadow-2xl lg:shadow-xl min-h-screen transition-transform duration-300 ease-in-out shrink-0 ${
+        isOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'
+      }`}>
+        {/* رأس القائمة */}
+        <div className="p-5 sm:p-6 border-b border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-500/30">
+              <ShieldCheck className="w-6 h-6" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold tracking-tight">شَبَكتي | أدمن</h1>
+              <p className="text-xs text-slate-400">بوابة الإدارة المركزية</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-lg font-bold tracking-tight">شَبَكتي | أدمن</h1>
-            <p className="text-xs text-slate-400">بوابة الإدارة المركزية</p>
-          </div>
+          {/* زر إغلاق للموبايل */}
+          <button
+            onClick={onClose}
+            className="p-2 text-slate-400 hover:text-white rounded-lg lg:hidden transition-colors"
+            title="إغلاق القائمة"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
-      </div>
 
       {/* عناصر التوجيه */}
       <nav className="flex-1 p-4 space-y-1.5">
@@ -45,7 +71,10 @@ export const Sidebar = ({ activeTab, setActiveTab, pendingOrdersCount = 0 }) => 
           return (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
+              onClick={() => {
+                setActiveTab(item.id);
+                if (onClose) onClose();
+              }}
               className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${
                 isActive
                   ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20 translate-x-1'
@@ -84,5 +113,6 @@ export const Sidebar = ({ activeTab, setActiveTab, pendingOrdersCount = 0 }) => 
         </div>
       </div>
     </aside>
+    </>
   );
 };

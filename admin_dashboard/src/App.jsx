@@ -22,6 +22,7 @@ export function App() {
   const [exchangeRate, setExchangeRate] = useState(535);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // إدارة جلسة Supabase Auth
   useEffect(() => {
@@ -173,11 +174,13 @@ export function App() {
       <Sidebar 
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
-        pendingOrdersCount={pendingCount} 
+        pendingOrdersCount={pendingCount}
+        isOpen={isMobileSidebarOpen}
+        onClose={() => setIsMobileSidebarOpen(false)}
       />
 
       {/* المحتوى الرئيسي */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden w-full">
         <Navbar
           title={getPageTitle()}
           walletBalance={walletBalance}
@@ -185,9 +188,10 @@ export function App() {
           isLoading={isLoading}
           onRefresh={handleRefreshAll}
           onLogout={handleLogout}
+          onToggleSidebar={() => setIsMobileSidebarOpen(prev => !prev)}
         />
 
-        <main className="flex-1 p-8 overflow-y-auto">
+        <main className="flex-1 p-3.5 sm:p-6 lg:p-8 overflow-y-auto">
           {activeTab === 'dashboard' && (
             <DashboardOverview
               orders={orders}
