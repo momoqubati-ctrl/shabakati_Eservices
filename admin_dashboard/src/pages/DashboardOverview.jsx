@@ -191,7 +191,11 @@ export const DashboardOverview = ({
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
               {orders.slice(0, 5).map((order) => {
-                const isReady = order.fulfillment_status === 'ready' || order.status === 'completed';
+                const allKeys = Array.isArray(order.delivered_assets)
+                  ? order.delivered_assets.map(a => a?.value || a?.key || (typeof a === 'string' ? a : '')).filter(Boolean)
+                  : (typeof order.delivered_assets === 'string' && order.delivered_assets ? [order.delivered_assets] : []);
+                const hasKey = allKeys.length > 0 || !!order.delivered_key;
+                const isReady = order.fulfillment_status === 'ready' || order.status === 'completed' || hasKey;
                 const isFailed = order.fulfillment_status === 'failed' || order.status === 'cancelled';
                 return (
                   <tr key={order.id || order.external_order_id} className="hover:bg-slate-50/50 dark:hover:bg-slate-750">

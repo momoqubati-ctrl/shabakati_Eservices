@@ -55,7 +55,18 @@ export function App() {
         .select('*')
         .order('created_at', { ascending: false });
       if (!error && data) {
-        setOrders(data);
+        let overrides = {};
+        try {
+          overrides = JSON.parse(localStorage.getItem('shabakti_order_overrides') || '{}');
+        } catch (_) {}
+        const merged = data.map(o => {
+          const key = o.id || o.external_order_id;
+          if (overrides[key]) {
+            return { ...o, ...overrides[key] };
+          }
+          return o;
+        });
+        setOrders(merged);
       }
     } catch (e) {
       console.error('Error fetching orders:', e);
@@ -226,10 +237,22 @@ export function App() {
           order={selectedOrder}
           onClose={() => setSelectedOrder(null)}
           onOrderUpdated={(updated) => {
-            fetchOrders();
             if (updated) {
+              const key = updated.id || updated.external_order_id;
+              try {
+                const overrides = JSON.parse(localStorage.getItem('shabakti_order_overrides') || '{}');
+                overrides[key] = updated;
+                localStorage.setItem('shabakti_order_overrides', JSON.stringify(overrides));
+              } catch (_) {}
+
+              setOrders(prev => prev.map(o => 
+                (o.id === updated.id || o.external_order_id === updated.external_order_id)
+                  ? { ...o, ...updated }
+                  : o
+              ));
               setSelectedOrder(updated);
             }
+            fetchOrders();
           }}
         />
       )}

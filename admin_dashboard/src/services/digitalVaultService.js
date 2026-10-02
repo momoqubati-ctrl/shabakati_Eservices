@@ -111,10 +111,20 @@ export class DigitalVaultService {
     return { ...data, httpStatus: resp.status, ok: resp.ok, rawText: text };
   }
 
+  static generateUUID() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+
   static async requestDeliveryAccess(sellerOrderId) {
     const path = `/api/seller/v1/orders/${sellerOrderId}/delivery-access`;
     const headers = this.generateHeaders('POST', path, {});
-    headers['Idempotency-Key'] = `admin-token-${sellerOrderId}-${Date.now()}`;
+    headers['Idempotency-Key'] = this.generateUUID();
     const resp = await fetch(`${API_CONFIG.baseUrl}/orders/${sellerOrderId}/delivery-access`, {
       method: 'POST',
       headers,
@@ -153,7 +163,7 @@ export class DigitalVaultService {
     const path = `/api/seller/v1/orders/${sellerOrderId}/cancellation-requests`;
     const body = { reason: (reason || 'إلغاء الطلب بناء على رغبة العميل').substring(0, 500) };
     const headers = this.generateHeaders('POST', path, body);
-    headers['Idempotency-Key'] = `cancel-${sellerOrderId}-${Date.now()}`;
+    headers['Idempotency-Key'] = this.generateUUID();
     const resp = await fetch(`${API_CONFIG.baseUrl}/orders/${sellerOrderId}/cancellation-requests`, {
       method: 'POST',
       headers,

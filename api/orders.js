@@ -5,6 +5,7 @@ const KEY_ID = process.env.VITE_DIGITAL_VAULT_KEY_ID || 'skey_01m37stgc9tpg5vsj5
 const API_SECRET = process.env.VITE_DIGITAL_VAULT_API_SECRET || 'ssec_96c632b8e715694af4b0fa62c8872cd2c99901fe0f13323c0cfb55251e335954';
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://enutfwspwrzpvhmtgftl.supabase.co';
 const SUPABASE_ANON = process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVudXRmd3Nwd3J6cHZobXRnZnRsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxODE3ODQsImV4cCI6MjEwNTc1Nzc4NH0.dRgwtfHV1OYWxeFKDon030mwesEIx_993cOQiAABTRs';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON;
 
 function signRequest(method, pathWithQuery, bodyData = null) {
   const nowUtc = new Date().toISOString().split('.')[0] + 'Z';
@@ -31,7 +32,7 @@ function signRequest(method, pathWithQuery, bodyData = null) {
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') {
@@ -50,6 +51,40 @@ export default async function handler(req, res) {
       });
       const data = await providerRes.json();
       return res.status(providerRes.status).json(data);
+    } catch (err) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  }
+
+  if (req.method === 'PATCH' || (req.method === 'POST' && req.body?.action === 'update')) {
+    const { id, external_order_id, fulfillment_status, status, delivered_assets, seller_order_id, notes } = req.body || {};
+    if (!id && !external_order_id) {
+      return res.status(400).json({ success: false, error: 'id or external_order_id is required' });
+    }
+
+    const updatePayload = {
+      updated_at: new Date().toISOString()
+    };
+    if (fulfillment_status !== undefined) updatePayload.fulfillment_status = fulfillment_status;
+    if (status !== undefined) updatePayload.status = status;
+    if (delivered_assets !== undefined) updatePayload.delivered_assets = delivered_assets;
+    if (seller_order_id !== undefined) updatePayload.seller_order_id = seller_order_id;
+    if (notes !== undefined) updatePayload.notes = notes;
+
+    try {
+      const queryParam = id ? `id=eq.${id}` : `external_order_id=eq.${external_order_id}`;
+      const patchRes = await fetch(`${SUPABASE_URL}/rest/v1/orders?${queryParam}`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(updatePayload)
+      });
+      const data = await patchRes.json();
+      return res.status(patchRes.status).json({ success: patchRes.ok, data });
     } catch (err) {
       return res.status(500).json({ success: false, error: err.message });
     }

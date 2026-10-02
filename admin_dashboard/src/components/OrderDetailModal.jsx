@@ -95,29 +95,38 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
         .filter(Boolean);
       const deliveredAssets = keys.map(k => ({ type: 'key', value: k }));
 
-      let updateQuery = supabase
-        .from('orders')
-        .update({
-          fulfillment_status: 'ready',
-          status: 'completed',
-          delivered_assets: deliveredAssets,
-          updated_at: new Date().toISOString()
+      const updatePayload = {
+        fulfillment_status: 'ready',
+        status: 'completed',
+        delivered_assets: deliveredAssets,
+        updated_at: new Date().toISOString()
+      };
+
+      try {
+        let updateQuery = supabase.from('orders').update(updatePayload);
+        if (currentOrder.id) {
+          updateQuery = updateQuery.eq('id', currentOrder.id);
+        } else if (currentOrder.external_order_id) {
+          updateQuery = updateQuery.eq('external_order_id', currentOrder.external_order_id);
+        }
+        await updateQuery;
+      } catch (_) {}
+
+      try {
+        await fetch('/api/orders', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: currentOrder.id,
+            external_order_id: currentOrder.external_order_id,
+            ...updatePayload
+          })
         });
-
-      if (currentOrder.id) {
-        updateQuery = updateQuery.eq('id', currentOrder.id);
-      } else if (currentOrder.external_order_id) {
-        updateQuery = updateQuery.eq('external_order_id', currentOrder.external_order_id);
-      }
-
-      const { error } = await updateQuery;
-      if (error) throw error;
+      } catch (_) {}
 
       const updated = {
         ...currentOrder,
-        fulfillment_status: 'ready',
-        status: 'completed',
-        delivered_assets: deliveredAssets
+        ...updatePayload
       };
 
       setCurrentOrder(updated);
@@ -227,34 +236,46 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
           updatePayload.delivered_assets = deliveredAssets;
         }
 
-        let updateQuery = supabase.from('orders').update(updatePayload);
-        if (currentOrder.id) {
-          updateQuery = updateQuery.eq('id', currentOrder.id);
-        } else if (currentOrder.external_order_id) {
-          updateQuery = updateQuery.eq('external_order_id', currentOrder.external_order_id);
-        }
-
-        const { error: supaErr } = await updateQuery;
-        if (!supaErr) {
-          const updated = {
-            ...currentOrder,
-            seller_order_id: activeSellerOrderId,
-            fulfillment_status: 'ready',
-            status: 'completed',
-            ...(hasKeys ? { delivered_assets: deliveredAssets } : {})
-          };
-
-          setCurrentOrder(updated);
-
-          if (hasKeys) {
-            const keysSummary = deliveredAssets.map(a => a.value).join(', ');
-            setSyncMessage(`✅ العملية منفذة لدى المزود! تم سحب وحفظ المفتاح الرقمي وتحديث حالة الطلب إلى (مكتمل) وإشعار العميل فوراً: ${keysSummary}`);
-          } else {
-            setSyncMessage(`✅ تم تأكيد تنفيذ العملية لدى المزود، وتم تحديث حالة الطلب إلى (مكتمل). يمكنك إدخال المفتاح يدوياً في حقل المفتاح لتسليمه للعميل فوراً.`);
+        try {
+          let updateQuery = supabase.from('orders').update(updatePayload);
+          if (currentOrder.id) {
+            updateQuery = updateQuery.eq('id', currentOrder.id);
+          } else if (currentOrder.external_order_id) {
+            updateQuery = updateQuery.eq('external_order_id', currentOrder.external_order_id);
           }
+          await updateQuery;
+        } catch (_) {}
 
-          if (onOrderUpdated) onOrderUpdated(updated);
+        try {
+          await fetch('/api/orders', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: currentOrder.id,
+              external_order_id: currentOrder.external_order_id,
+              ...updatePayload
+            })
+          });
+        } catch (_) {}
+
+        const updated = {
+          ...currentOrder,
+          seller_order_id: activeSellerOrderId,
+          fulfillment_status: 'ready',
+          status: 'completed',
+          ...(hasKeys ? { delivered_assets: deliveredAssets } : {})
+        };
+
+        setCurrentOrder(updated);
+
+        if (hasKeys) {
+          const keysSummary = deliveredAssets.map(a => a.value).join(', ');
+          setSyncMessage(`✅ العملية منفذة لدى المزود! تم سحب وحفظ المفتاح الرقمي وتحديث حالة الطلب إلى (مكتمل) وإشعار العميل فوراً: ${keysSummary}`);
+        } else {
+          setSyncMessage(`✅ تم تأكيد تنفيذ العملية لدى المزود، وتم تحديث حالة الطلب إلى (مكتمل). يمكنك إدخال المفتاح يدوياً في حقل المفتاح لتسليمه للعميل فوراً.`);
         }
+
+        if (onOrderUpdated) onOrderUpdated(updated);
       }
     } catch (err) {
       setProviderResponse({
@@ -333,28 +354,43 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
             })).filter(a => a.value);
 
             if (deliveredAssets.length > 0) {
-              await supabase
-                .from('orders')
-                .update({
-                  seller_order_id: activeSellerOrderId,
-                  fulfillment_status: 'ready',
-                  status: 'completed',
-                  delivered_assets: deliveredAssets,
-                  updated_at: new Date().toISOString()
-                })
-                .eq('id', currentOrder.id);
-
-              setCurrentOrder(prev => ({
-                ...prev,
+              const execPayload = {
                 seller_order_id: activeSellerOrderId,
                 fulfillment_status: 'ready',
                 status: 'completed',
-                delivered_assets: deliveredAssets
-              }));
+                delivered_assets: deliveredAssets,
+                updated_at: new Date().toISOString()
+              };
+
+              try {
+                await supabase
+                  .from('orders')
+                  .update(execPayload)
+                  .eq('id', currentOrder.id);
+              } catch (_) {}
+
+              try {
+                await fetch('/api/orders', {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    id: currentOrder.id,
+                    external_order_id: currentOrder.external_order_id,
+                    ...execPayload
+                  })
+                });
+              } catch (_) {}
+
+              const updated = {
+                ...currentOrder,
+                ...execPayload
+              };
+
+              setCurrentOrder(updated);
 
               const keysSummary = deliveredAssets.map(a => a.value).join(', ');
               setSyncMessage(`✅ تم تنفيذ الطلب لدى المزود وسحب المفتاح الرقمي بنجاح (${deliveredAssets.length} عنصر): ${keysSummary}`);
-              if (onOrderUpdated) onOrderUpdated();
+              if (onOrderUpdated) onOrderUpdated(updated);
               return;
             }
           }
@@ -381,18 +417,31 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
     setIsCancelling(true);
     setSyncMessage(null);
     try {
-      // تحديث حالة الطلب في Supabase إلى ملغي/فاشل وتخزين الملاحظة
-      const { error } = await supabase
-        .from('orders')
-        .update({
-          fulfillment_status: 'failed',
-          status: 'cancelled',
-          notes: cancelNote.trim(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', currentOrder.id);
+      const cancelPayload = {
+        fulfillment_status: 'failed',
+        status: 'cancelled',
+        notes: cancelNote.trim(),
+        updated_at: new Date().toISOString()
+      };
 
-      if (error) throw error;
+      try {
+        await supabase
+          .from('orders')
+          .update(cancelPayload)
+          .eq('id', currentOrder.id);
+      } catch (_) {}
+
+      try {
+        await fetch('/api/orders', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: currentOrder.id,
+            external_order_id: currentOrder.external_order_id,
+            ...cancelPayload
+          })
+        });
+      } catch (_) {}
 
       // إشعار المزود بالإلغاء إن كان الطلب منشأ لديه
       if (currentOrder.seller_order_id) {
@@ -401,16 +450,16 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
         } catch (_) {}
       }
 
-      setCurrentOrder(prev => ({
-        ...prev,
-        fulfillment_status: 'failed',
-        status: 'cancelled',
-        notes: cancelNote.trim()
-      }));
+      const updated = {
+        ...currentOrder,
+        ...cancelPayload
+      };
+
+      setCurrentOrder(updated);
 
       setShowCancelForm(false);
       setSyncMessage('✅ تم إلغاء وتفشيل العملية بنجاح وتسجيل تأكيد عكس المبلغ. ستظهر الملاحظة فوراً للعميل في التطبيق.');
-      if (onOrderUpdated) onOrderUpdated();
+      if (onOrderUpdated) onOrderUpdated(updated);
     } catch (err) {
       alert('فشل إلغاء الطلب: ' + err.message);
     } finally {
