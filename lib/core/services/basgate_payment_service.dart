@@ -10,6 +10,9 @@ class BasGatePaymentResult {
   final bool isCancelled;
   final String message;
   final String? paymentId;
+  final String? paymentReference;
+  final String? paymentMethod;
+  final String? walletName;
   final String? orderId;
   final String? trxToken;
   final int? statusCode;
@@ -20,6 +23,9 @@ class BasGatePaymentResult {
     this.isCancelled = false,
     required this.message,
     this.paymentId,
+    this.paymentReference,
+    this.paymentMethod,
+    this.walletName,
     this.orderId,
     this.trxToken,
     this.statusCode,
@@ -28,7 +34,7 @@ class BasGatePaymentResult {
 
   @override
   String toString() {
-    return 'BasGatePaymentResult(isSuccess: $isSuccess, isCancelled: $isCancelled, message: $message, paymentId: $paymentId, orderId: $orderId)';
+    return 'BasGatePaymentResult(isSuccess: $isSuccess, isCancelled: $isCancelled, message: $message, paymentId: $paymentId, paymentReference: $paymentReference, walletName: $walletName, orderId: $orderId)';
   }
 }
 
@@ -159,12 +165,18 @@ class BasGatePaymentService {
 
       final bool isAuthoritativeSuccess = verifyData['success'] == true || verifyData['outcome'] == 'SUCCESS';
       final String outcome = verifyData['outcome']?.toString() ?? (isAuthoritativeSuccess ? 'SUCCESS' : 'FAILED');
+      final String? paymentReference = verifyData['payment_reference']?.toString() ?? createdPaymentId;
+      final String paymentMethod = verifyData['payment_method']?.toString() ?? 'المحافظ الإلكترونية';
+      final String? walletName = verifyData['wallet_name']?.toString();
 
       if (isAuthoritativeSuccess) {
         return BasGatePaymentResult(
           isSuccess: true,
           message: 'تم تأكيد عملية الدفع بنجاح.',
           paymentId: createdPaymentId,
+          paymentReference: paymentReference,
+          paymentMethod: paymentMethod,
+          walletName: walletName,
           orderId: orderId,
           trxToken: trxToken,
           statusCode: 1202,

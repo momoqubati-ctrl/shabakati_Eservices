@@ -112,7 +112,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'PATCH' || (req.method === 'POST' && req.body?.action === 'update')) {
-    const { id, external_order_id, fulfillment_status, status, delivered_assets, seller_order_id, notes } = req.body || {};
+    const { id, external_order_id, fulfillment_status, status, delivered_assets, seller_order_id, notes, payment_id, payment_reference, payment_method, wallet_name } = req.body || {};
     if (!id && !external_order_id && !seller_order_id) {
       return res.status(400).json({ success: false, error: 'id or external_order_id or seller_order_id is required' });
     }
@@ -125,6 +125,10 @@ export default async function handler(req, res) {
     if (delivered_assets !== undefined) updatePayload.delivered_assets = delivered_assets;
     if (seller_order_id !== undefined) updatePayload.seller_order_id = seller_order_id;
     if (notes !== undefined) updatePayload.notes = notes;
+    if (payment_id !== undefined) updatePayload.payment_id = payment_id;
+    if (payment_reference !== undefined) updatePayload.payment_reference = payment_reference;
+    if (payment_method !== undefined) updatePayload.payment_method = payment_method;
+    if (wallet_name !== undefined) updatePayload.wallet_name = wallet_name;
 
     try {
       let queryParam = '';
@@ -153,7 +157,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { items, external_order_id, device_id, telegram_user, contact_phone, contact_email, payment_id, user_id, account_number } = req.body || {};
+    const { items, external_order_id, device_id, telegram_user, contact_phone, contact_email, payment_id, payment_reference, payment_method, wallet_name, user_id, account_number } = req.body || {};
     const externalId = external_order_id || `ord_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
     const orderPayload = {
@@ -217,6 +221,26 @@ export default async function handler(req, res) {
 
     // 3. الحفظ في Supabase
     try {
+      let resolvedRef = payment_reference || null;
+      let resolvedWallet = wallet_name || null;
+      if (payment_id && (!resolvedRef || !resolvedWallet)) {
+        try {
+          const pRes = await fetch(`${SUPABASE_URL}/rest/v1/payments?id=eq.${payment_id}&select=payment_reference,wallet_name`, {
+            headers: {
+              'apikey': SUPABASE_KEY,
+              'Authorization': `Bearer ${SUPABASE_KEY}`
+            }
+          });
+          if (pRes.ok) {
+            const pRows = await pRes.json();
+            if (pRows?.[0]) {
+              resolvedRef = resolvedRef || pRows[0].payment_reference || payment_id;
+              resolvedWallet = resolvedWallet || pRows[0].wallet_name || null;
+            }
+          }
+        } catch (_) {}
+      }
+
       const orderRecord = {
         external_order_id: externalId,
         device_id: device_id || 'unknown_device',
@@ -231,6 +255,9 @@ export default async function handler(req, res) {
         idempotency_key: externalId,
         delivered_assets: deliveredAssetsList || (deliveredKey ? [{ type: 'key', value: deliveredKey }] : null),
         payment_id: payment_id || null,
+        payment_reference: resolvedRef || payment_id || null,
+        payment_method: payment_method || 'المحافظ الإلكترونية',
+        wallet_name: resolvedWallet || null,
         user_id: user_id || null,
         account_number: account_number || null
       };

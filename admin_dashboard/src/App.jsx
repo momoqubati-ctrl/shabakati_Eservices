@@ -47,24 +47,60 @@ export function App() {
     setSession(null);
   };
 
-  // جلب الطلبات من Supabase
+  // جلب الطلبات من Supabase ودمجها مع سجلات الدفع بالمحافظ الإلكترونية
   const fetchOrders = async () => {
     try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const [{ data, error }, { data: paymentsData }] = await Promise.all([
+        supabase
+          .from('orders')
+          .select('*')
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('payments')
+          .select('id, external_order_id, payment_reference, wallet_name, provider, status, user_account, created_at')
+          .order('created_at', { ascending: false })
+          .limit(200),
+      ]);
+
       if (!error && data) {
+        const paymentsById = {};
+        const paymentsByOrderId = {};
+        if (Array.isArray(paymentsData)) {
+          paymentsData.forEach((p) => {
+            if (p.id) paymentsById[p.id] = p;
+            if (p.external_order_id) paymentsByOrderId[p.external_order_id] = p;
+          });
+        }
+
         let overrides = {};
         try {
           overrides = JSON.parse(localStorage.getItem('shabakti_order_overrides') || '{}');
         } catch (_) {}
-        const merged = data.map(o => {
-          const key = o.id || o.external_order_id;
+
+        const merged = data.map((o) => {
+          const matchedPayment =
+            (o.payment_id && paymentsById[o.payment_id]) ||
+            (o.external_order_id && paymentsByOrderId[o.external_order_id]) ||
+            null;
+
+          const enriched = {
+            ...o,
+            payment_id: o.payment_id || matchedPayment?.id || null,
+            payment_reference:
+              o.payment_reference ||
+              matchedPayment?.payment_reference ||
+              o.payment_id ||
+              matchedPayment?.id ||
+              null,
+            payment_method: o.payment_method || 'المحافظ الإلكترونية',
+            wallet_name: o.wallet_name || matchedPayment?.wallet_name || null,
+          };
+
+          const key = enriched.id || enriched.external_order_id;
           if (overrides[key]) {
-            return { ...o, ...overrides[key] };
+            return { ...enriched, ...overrides[key] };
           }
-          return o;
+          return enriched;
         });
         setOrders(merged);
       }

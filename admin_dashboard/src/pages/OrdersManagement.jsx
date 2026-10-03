@@ -7,6 +7,7 @@ import {
   Send, 
   Key, 
   Ban,
+  Wallet,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
@@ -39,7 +40,9 @@ export const OrdersManagement = ({ orders = [], onSelectOrder }) => {
     const tgMatch = order.telegram_user?.toLowerCase().includes(term);
     const phoneMatch = order.contact_phone?.toLowerCase().includes(term);
     const deviceMatch = order.device_id?.toLowerCase().includes(term);
-    return idMatch || tgMatch || phoneMatch || deviceMatch;
+    const refMatch = order.payment_reference?.toLowerCase().includes(term) || order.payment_id?.toLowerCase().includes(term);
+    const walletMatch = order.wallet_name?.toLowerCase().includes(term);
+    return idMatch || tgMatch || phoneMatch || deviceMatch || refMatch || walletMatch;
   });
 
   return (
@@ -53,7 +56,7 @@ export const OrdersManagement = ({ orders = [], onSelectOrder }) => {
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="ابحث برقم الطلب، يوزر تيليجرام، أو الهاتف..."
+            placeholder="ابحث برقم الطلب، مرجع الدفع، يوزر تيليجرام، أو الهاتف..."
             className="w-full pl-4 pr-10 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
           />
         </div>
@@ -116,6 +119,7 @@ export const OrdersManagement = ({ orders = [], onSelectOrder }) => {
                 <th className="p-4">تاريخ الطلب</th>
                 <th className="p-4">العميل / التواصل</th>
                 <th className="p-4">المبلغ</th>
+                <th className="p-4">رقم مرجع الدفع</th>
                 <th className="p-4">حالة التنفيذ</th>
                 <th className="p-4">المفتاح المسلم</th>
                 <th className="p-4 text-center">الإجراءات</th>
@@ -129,6 +133,7 @@ export const OrdersManagement = ({ orders = [], onSelectOrder }) => {
                 const hasKey = allKeys.length > 0 || !!order.delivered_key;
                 const isReady = order.fulfillment_status === 'ready' || order.status === 'completed' || hasKey;
                 const isFailed = order.fulfillment_status === 'failed' || order.status === 'cancelled';
+                const paymentRef = order.payment_reference || order.payment_id;
                 return (
                   <tr key={order.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-750/50 transition-colors">
                     <td className="p-4 font-mono font-bold text-blue-600 dark:text-blue-400">
@@ -153,6 +158,23 @@ export const OrdersManagement = ({ orders = [], onSelectOrder }) => {
                     </td>
                     <td className="p-4 font-extrabold text-slate-900 dark:text-white">
                       ${((order.total_cents || 0) / 100).toFixed(2)} USD
+                    </td>
+                    <td className="p-4">
+                      {paymentRef ? (
+                        <div className="space-y-0.5">
+                          <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-md inline-block text-[11px]">
+                            {paymentRef}
+                          </span>
+                          {order.wallet_name && (
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                              <Wallet className="w-3 h-3 text-emerald-500" />
+                              {order.wallet_name}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-slate-400 text-[11px]">غير مسجل</span>
+                      )}
                     </td>
                     <td className="p-4">
                       <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold inline-flex items-center gap-1 ${
@@ -192,7 +214,7 @@ export const OrdersManagement = ({ orders = [], onSelectOrder }) => {
               })}
               {filteredOrders.length === 0 && (
                 <tr>
-                  <td colSpan="7" className="p-12 text-center text-slate-400">
+                  <td colSpan="8" className="p-12 text-center text-slate-400">
                     لم يتم العثور على أي طلبات مطابقة للفلترة أو البحث.
                   </td>
                 </tr>

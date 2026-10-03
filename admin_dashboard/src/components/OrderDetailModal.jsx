@@ -16,7 +16,9 @@ import {
   ChevronUp,
   FileText,
   Search,
-  DollarSign
+  DollarSign,
+  Wallet,
+  CreditCard
 } from 'lucide-react';
 import { supabase } from '../config/supabase';
 import { DigitalVaultService } from '../services/digitalVaultService';
@@ -48,21 +50,47 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
     () => `تم إلغاء الطلب بناءً على رغبة العميل وتم عكس المبلغ ($${(((order?.total_cents || 0) / 100).toFixed(2))} USD) إلى محفظة العميل الإلكترونية بنجاح.`
   );
 
-  // M1: جلب عناصر الطلب عند فتح النافذة
+  // M1: جلب عناصر الطلب وبيانات الدفع عند فتح النافذة
   React.useEffect(() => {
-    const fetchItems = async () => {
-      if (!order?.id) { setIsLoadingItems(false); return; }
-      try {
-        const { data, error } = await supabase
-          .from('order_items')
-          .select('*')
-          .eq('order_id', order.id);
-        if (!error && data) setOrderItems(data);
-      } catch (_) {}
+    const fetchItemsAndPayment = async () => {
+      if (order?.id) {
+        try {
+          const { data, error } = await supabase
+            .from('order_items')
+            .select('*')
+            .eq('order_id', order.id);
+          if (!error && data) setOrderItems(data);
+        } catch (_) {}
+      }
       setIsLoadingItems(false);
+
+      // التحقق من بيانات مرجع الدفع والمحفظة الإلكترونية من جدول payments إذا لم تكن محملة
+      if (order && (!order.payment_reference || !order.wallet_name) && (order.payment_id || order.external_order_id)) {
+        try {
+          let payQuery = supabase
+            .from('payments')
+            .select('id, payment_reference, wallet_name, provider, status');
+          if (order.payment_id) {
+            payQuery = payQuery.eq('id', order.payment_id);
+          } else {
+            payQuery = payQuery.eq('external_order_id', order.external_order_id);
+          }
+          const { data: payRows } = await payQuery.limit(1);
+          if (payRows && payRows[0]) {
+            const p = payRows[0];
+            setCurrentOrder(prev => ({
+              ...prev,
+              payment_id: prev.payment_id || p.id,
+              payment_reference: prev.payment_reference || p.payment_reference || p.id,
+              payment_method: prev.payment_method || 'المحافظ الإلكترونية',
+              wallet_name: prev.wallet_name || p.wallet_name || null,
+            }));
+          }
+        } catch (_) {}
+      }
     };
-    fetchItems();
-  }, [order?.id]);
+    fetchItemsAndPayment();
+  }, [order?.id, order?.payment_id, order?.external_order_id]);
 
   React.useEffect(() => {
     if (order) setCurrentOrder(order);
@@ -652,10 +680,10 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
           )}
         </div>
 
-        {/* بيانات العميل والتواصل */}
+        {/* بيانات العميل والدفع عبر المحافظ الإلكترونية */}
         <div className="space-y-2 text-xs">
-          <h4 className="font-bold text-slate-800 dark:text-slate-200">بيانات العميل:</h4>
-          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50 space-y-2">
+          <h4 className="font-bold text-slate-800 dark:text-slate-200">بيانات العميل وعملية الدفع:</h4>
+          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50 space-y-2.5">
             <div className="flex justify-between items-center">
               <span className="text-slate-500">حساب تيليجرام:</span>
               {currentOrder.telegram_user ? (
@@ -674,7 +702,7 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
             <div className="flex justify-between">
               <span className="text-slate-500">رقم الهاتف / الواتساب:</span>
               <span className="font-semibold text-slate-800 dark:text-slate-200">
-                {currentOrder.contact_phone || 'غير مسجل'}
+                {currentOrder.contact_phone || currentOrder.account_number || 'غير مسجل'}
               </span>
             </div>
             <div className="flex justify-between">
@@ -683,16 +711,59 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
                 {currentOrder.device_id || 'غير متوفر'}
               </span>
             </div>
-            {currentOrder.payment_id && (
-              <div className="flex justify-between pt-1 border-t border-slate-200 dark:border-slate-700">
-                <span className="text-slate-500 flex items-center gap-1">
-                  <DollarSign className="w-3 h-3" /> رقم عملية الدفع البنكي:
+
+            {/* تفاصيل طريقة الدفع والمحفظة الإلكترونية ورقم المرجع */}
+            <div className="pt-2.5 mt-1 border-t border-slate-200 dark:border-slate-700 space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 flex items-center gap-1.5">
+                  <CreditCard className="w-3.5 h-3.5 text-blue-500" /> طريقة الدفع:
                 </span>
-                <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-[11px]">
-                  {currentOrder.payment_id}
+                <span className="font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2.5 py-0.5 rounded-lg text-[11px]">
+                  {currentOrder.payment_method || 'المحافظ الإلكترونية'}
                 </span>
               </div>
-            )}
+
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 flex items-center gap-1.5">
+                  <Wallet className="w-3.5 h-3.5 text-emerald-500" /> المحفظة الإلكترونية الدافعة:
+                </span>
+                <span className="font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-lg text-[11px]">
+                  {currentOrder.wallet_name || 'محفظة إلكترونية (عبر بوابة BasGate)'}
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 flex items-center gap-1.5">
+                  <DollarSign className="w-3.5 h-3.5 text-indigo-500" /> رقم مرجع عملية الدفع:
+                </span>
+                {(currentOrder.payment_reference || currentOrder.payment_id) ? (
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-md text-[11px] select-all">
+                      {currentOrder.payment_reference || currentOrder.payment_id}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(currentOrder.payment_reference || currentOrder.payment_id)}
+                      className="p-1 text-slate-400 hover:text-indigo-500 rounded transition-colors"
+                      title="نسخ رقم المرجع"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-slate-400 text-[11px]">غير مسجل</span>
+                )}
+              </div>
+
+              {currentOrder.payment_id && currentOrder.payment_reference && currentOrder.payment_id !== currentOrder.payment_reference && (
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 text-[11px]">معرّف المعاملة الداخلي:</span>
+                  <span className="font-mono text-slate-400 text-[10px]">
+                    {currentOrder.payment_id}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

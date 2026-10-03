@@ -237,6 +237,9 @@ class CartPage extends StatelessWidget {
               telegramUser: telegramUser,
               contactPhone: effectivePhone,
               paymentId: paymentResult.paymentId,
+              paymentReference: paymentResult.paymentReference,
+              paymentMethod: paymentResult.paymentMethod ?? 'المحافظ الإلكترونية',
+              walletName: paymentResult.walletName,
               userId: currentUser.id,
               accountNumber: currentUser.accountNumber,
             );

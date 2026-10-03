@@ -17,6 +17,9 @@ abstract class IOrderRepository {
     String? contactPhone,
     String? contactEmail,
     String? paymentId,
+    String? paymentReference,
+    String? paymentMethod,
+    String? walletName,
     int? userId,
     String? accountNumber,
   });
@@ -56,6 +59,9 @@ class OrderRepository implements IOrderRepository {
     String? contactPhone,
     String? contactEmail,
     String? paymentId,
+    String? paymentReference,
+    String? paymentMethod,
+    String? walletName,
     int? userId,
     String? accountNumber,
   }) async {
@@ -136,6 +142,9 @@ class OrderRepository implements IOrderRepository {
       telegramUser: telegramUser,
       contactPhone: contactPhone,
       paymentId: paymentId,
+      paymentReference: paymentReference ?? paymentId,
+      paymentMethod: paymentMethod ?? 'المحافظ الإلكترونية',
+      walletName: walletName,
       userId: userId,
       accountNumber: accountNumber,
     );
@@ -288,6 +297,9 @@ class OrderRepository implements IOrderRepository {
             'idempotency_key': const Uuid().v4(),
             'delivered_assets': deliveredAssets,
             'payment_id': order.paymentId,
+            'payment_reference': order.paymentReference ?? order.paymentId,
+            'payment_method': order.paymentMethod ?? 'المحافظ الإلكترونية',
+            'wallet_name': order.walletName,
             'user_id': userId,
             'account_number': accountNumber,
           })

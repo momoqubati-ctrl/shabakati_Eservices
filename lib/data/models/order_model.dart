@@ -16,6 +16,9 @@ class OrderModel {
   final String? contactPhone;
   final String? notes;
   final String? paymentId;
+  final String? paymentReference;
+  final String? paymentMethod;
+  final String? walletName;
   final int? userId;
   final String? accountNumber;
 
@@ -34,6 +37,9 @@ class OrderModel {
     this.contactPhone,
     this.notes,
     this.paymentId,
+    this.paymentReference,
+    this.paymentMethod,
+    this.walletName,
     this.userId,
     this.accountNumber,
   });
@@ -81,6 +87,9 @@ class OrderModel {
     String? contactPhone,
     String? notes,
     String? paymentId,
+    String? paymentReference,
+    String? paymentMethod,
+    String? walletName,
     int? userId,
     String? accountNumber,
   }) {
@@ -99,6 +108,9 @@ class OrderModel {
       contactPhone: contactPhone ?? this.contactPhone,
       notes: notes ?? this.notes,
       paymentId: paymentId ?? this.paymentId,
+      paymentReference: paymentReference ?? this.paymentReference,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
+      walletName: walletName ?? this.walletName,
       userId: userId ?? this.userId,
       accountNumber: accountNumber ?? this.accountNumber,
     );
@@ -177,6 +189,9 @@ class OrderModel {
       contactPhone: json['contact_phone']?.toString(),
       notes: json['notes']?.toString() ?? json['failure_reason']?.toString(),
       paymentId: json['payment_id']?.toString(),
+      paymentReference: json['payment_reference']?.toString(),
+      paymentMethod: json['payment_method']?.toString(),
+      walletName: json['wallet_name']?.toString(),
       userId: json['user_id'] is int ? json['user_id'] : int.tryParse(json['user_id']?.toString() ?? ''),
       accountNumber: json['account_number']?.toString(),
     );
@@ -202,6 +217,9 @@ class OrderModel {
             ]
           : null,
       'payment_id': paymentId,
+      'payment_reference': paymentReference ?? paymentId,
+      'payment_method': paymentMethod ?? 'المحافظ الإلكترونية',
+      'wallet_name': walletName,
       'notes': notes,
       'user_id': userId,
       'account_number': accountNumber,

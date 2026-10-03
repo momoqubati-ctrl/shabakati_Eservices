@@ -198,6 +198,9 @@ class OrdersCubit extends Cubit<OrdersState> {
     String? contactPhone,
     String? contactEmail,
     String? paymentId,
+    String? paymentReference,
+    String? paymentMethod,
+    String? walletName,
     int? userId,
     String? accountNumber,
   }) async {
@@ -218,6 +221,9 @@ class OrdersCubit extends Cubit<OrdersState> {
         contactPhone: contactPhone,
         contactEmail: contactEmail,
         paymentId: paymentId,
+        paymentReference: paymentReference,
+        paymentMethod: paymentMethod,
+        walletName: walletName,
         userId: resolvedUserId,
         accountNumber: resolvedAccountNumber,
       );
@@ -243,6 +249,10 @@ class OrdersCubit extends Cubit<OrdersState> {
         currency: 'USD',
         createdAt: DateTime.now(),
         contactPhone: contactPhone,
+        paymentId: paymentId,
+        paymentReference: paymentReference ?? paymentId,
+        paymentMethod: paymentMethod ?? 'المحافظ الإلكترونية',
+        walletName: walletName,
         userId: userId ?? _currentUser?.id,
         accountNumber: accountNumber ?? _currentUser?.accountNumber,
       );

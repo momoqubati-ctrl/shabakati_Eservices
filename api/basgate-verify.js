@@ -74,6 +74,9 @@ export default async function handler(req, res) {
         success: true,
         outcome: 'SUCCESS',
         payment_id: payment.id,
+        payment_reference: payment.payment_reference || payment.id,
+        payment_method: 'المحافظ الإلكترونية',
+        wallet_name: payment.wallet_name || 'محفظة إلكترونية (BasGate)',
         status: 'completed',
         message: 'تم تأكيد عملية الدفع بنجاح'
       });
@@ -166,6 +169,33 @@ export default async function handler(req, res) {
     const dataBody = responseObj.body || {};
     const orderData = dataBody.order || {};
 
+    // استخراج رقم مرجع العملية واسم المحفظة الإلكترونية من استجابة BasGate
+    const descStr = String(orderData.description || dataBody.description || '');
+    const refMatch = descStr.match(/(?:رقم المرجع|Ref|Sdk)\s*[:#]?\s*([A-Za-z0-9_-]+)/i) || descStr.match(/(Sdk[0-9A-Za-z_-]+)/i);
+    const extractedRef =
+      dataBody.referenceId ||
+      dataBody.referenceNumber ||
+      dataBody.trxReference ||
+      dataBody.bankReference ||
+      orderData.referenceId ||
+      orderData.referenceNumber ||
+      (refMatch ? (refMatch[1]?.startsWith('Sdk') ? refMatch[1] : (descStr.match(/(Sdk[0-9A-Za-z_-]+)/i)?.[1] || refMatch[1])) : null) ||
+      dataBody.trxId ||
+      payment.payment_reference ||
+      payment.id;
+
+    const walletFromDescMatch = descStr.match(/لدى\s+(.+)$/);
+    const walletFromDesc = walletFromDescMatch && walletFromDescMatch[1] ? walletFromDescMatch[1].trim() : '';
+    const extractedWalletName =
+      walletFromDesc ||
+      (dataBody.paymentMethodNameAr ? String(dataBody.paymentMethodNameAr).trim() : '') ||
+      (dataBody.walletName ? String(dataBody.walletName).trim() : '') ||
+      (dataBody.providerName ? String(dataBody.providerName).trim() : '') ||
+      (dataBody.channelName ? String(dataBody.channelName).trim() : '') ||
+      (dataBody.paymentMethodNameEn ? String(dataBody.paymentMethodNameEn).trim() : '') ||
+      payment.wallet_name ||
+      'محفظة إلكترونية (BasGate)';
+
     const apiStatus = Number(responseObj.status ?? -1);
     const apiCode = String(responseObj.code ?? '');
     const paymentStatus = Number(dataBody.paymentStatus ?? orderData.paymentStatus ?? -1);
@@ -203,7 +233,7 @@ export default async function handler(req, res) {
       userMessage = 'تعثرت عملية الدفع لدى البنك/المحفظة';
     }
 
-    // 5. تحديث السجل في Supabase
+    // 5. تحديث السجل في Supabase مع رقم المرجع واسم المحفظة
     await fetch(`${SUPABASE_URL}/rest/v1/payments?id=eq.${payment.id}`, {
       method: 'PATCH',
       headers: {
@@ -214,6 +244,8 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         status: finalStatus,
+        payment_reference: extractedRef,
+        wallet_name: extractedWalletName,
         updated_at: new Date().toISOString()
       })
     });
@@ -234,6 +266,8 @@ export default async function handler(req, res) {
           outcome,
           paymentStatus,
           trxStatus,
+          payment_reference: extractedRef,
+          wallet_name: extractedWalletName,
           rawResponse
         }
       })
@@ -244,6 +278,10 @@ export default async function handler(req, res) {
       outcome,
       status: finalStatus,
       payment_id: payment.id,
+      payment_reference: extractedRef,
+      payment_method: 'المحافظ الإلكترونية',
+      wallet_name: extractedWalletName,
+      trx_id: dataBody.trxId || null,
       payment_status_code: paymentStatus,
       message: userMessage,
       raw_details: rawResponse

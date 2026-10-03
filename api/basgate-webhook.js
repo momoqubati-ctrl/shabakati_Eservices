@@ -24,11 +24,22 @@ export default async function handler(req, res) {
       const isSuccess = paymentStatus === 1202;
       const dbStatus = isSuccess ? 'completed' : 'failed';
 
-      await supabase.from('payments').update({
+      const descStr = String(body.order?.description || body.description || '');
+      const refMatch = descStr.match(/(Sdk[0-9A-Za-z_-]+)/i);
+      const paymentReference = body.referenceId || body.referenceNumber || (refMatch ? refMatch[1] : null) || body.trxId || null;
+      const walletFromDescMatch = descStr.match(/لدى\s+(.+)$/);
+      const walletFromDesc = walletFromDescMatch && walletFromDescMatch[1] ? walletFromDescMatch[1].trim() : '';
+      const walletName = walletFromDesc || body.paymentMethodNameAr || body.walletName || body.paymentMethodNameEn || null;
+
+      const updateFields = {
         status: dbStatus,
         updated_at: new Date().toISOString(),
         metadata: { webhook_payload: payload }
-      }).eq('external_order_id', orderId);
+      };
+      if (paymentReference) updateFields.payment_reference = paymentReference;
+      if (walletName) updateFields.wallet_name = walletName;
+
+      await supabase.from('payments').update(updateFields).eq('external_order_id', orderId);
 
       await supabase.from('payment_logs').insert({
         payment_id: orderId,

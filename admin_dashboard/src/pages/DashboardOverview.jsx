@@ -184,6 +184,7 @@ export const DashboardOverview = ({
                 <th className="p-3.5">رقم الطلب</th>
                 <th className="p-3.5">حساب تيليجرام / العميل</th>
                 <th className="p-3.5">المبلغ</th>
+                <th className="p-3.5">رقم مرجع الدفع</th>
                 <th className="p-3.5">حالة التنفيذ</th>
                 <th className="p-3.5">المفتاح المسلم</th>
                 <th className="p-3.5 text-center">إجراءات</th>
@@ -197,6 +198,7 @@ export const DashboardOverview = ({
                 const hasKey = allKeys.length > 0 || !!order.delivered_key;
                 const isReady = order.fulfillment_status === 'ready' || order.status === 'completed' || hasKey;
                 const isFailed = order.fulfillment_status === 'failed' || order.status === 'cancelled';
+                const paymentRef = order.payment_reference || order.payment_id;
                 return (
                   <tr key={order.id || order.external_order_id} className="hover:bg-slate-50/50 dark:hover:bg-slate-750">
                     <td className="p-3.5 font-mono font-bold text-blue-600 dark:text-blue-400">
@@ -207,6 +209,15 @@ export const DashboardOverview = ({
                     </td>
                     <td className="p-3.5 font-bold text-slate-900 dark:text-white">
                       ${((order.total_cents || 0) / 100).toFixed(2)} USD
+                    </td>
+                    <td className="p-3.5 font-mono">
+                      {paymentRef ? (
+                        <span className="font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-md inline-block text-[11px]">
+                          {paymentRef}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 text-[11px]">غير مسجل</span>
+                      )}
                     </td>
                     <td className="p-3.5">
                       <span className={`px-2.5 py-1 rounded-full font-bold text-[10px] inline-flex items-center gap-1 ${
@@ -235,7 +246,7 @@ export const DashboardOverview = ({
               })}
               {orders.length === 0 && (
                 <tr>
-                  <td colSpan="6" className="p-8 text-center text-slate-400">
+                  <td colSpan="7" className="p-8 text-center text-slate-400">
                     لا توجد طلبات مسجلة حتى الآن.
                   </td>
                 </tr>
