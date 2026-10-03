@@ -9,6 +9,7 @@ import '../../logic/auth/auth_state.dart';
 import '../../logic/cart/cart_cubit.dart';
 import '../../logic/orders/orders_cubit.dart';
 import 'auth/login_page.dart';
+import 'privacy_policy_page.dart';
 
 class AccountProfilePage extends StatefulWidget {
   const AccountProfilePage({super.key});
@@ -806,8 +807,8 @@ class _AccountProfilePageState extends State<AccountProfilePage> {
 
                 const SizedBox(height: 20),
 
-                // قسم المساعدة والدعم الفني عبر واتساب
-                const Text('المساعدة والدعم', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                // قسم المساعدة والدعم والخصوصية
+                const Text('المساعدة والخصوصية', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 10),
 
                 Container(
@@ -816,19 +817,43 @@ class _AccountProfilePageState extends State<AccountProfilePage> {
                     borderRadius: BorderRadius.circular(18),
                     border: Border.all(color: colorScheme.outlineVariant.withAlpha(100)),
                   ),
-                  child: ListTile(
-                    leading: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF25D366).withAlpha(30),
-                        shape: BoxShape.circle,
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: colorScheme.primaryContainer,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(Icons.privacy_tip_outlined, color: colorScheme.primary, size: 22),
+                        ),
+                        title: const Text('سياسة الخصوصية وشروط الاستخدام', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        subtitle: const Text('حماية البيانات، الصلاحيات، وحقوق المستخدم', style: TextStyle(fontSize: 11)),
+                        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const PrivacyPolicyPage()),
+                          );
+                        },
                       ),
-                      child: const Icon(Icons.support_agent_rounded, color: Color(0xFF25D366), size: 22),
-                    ),
-                    title: const Text('الدعم الفني عبر واتساب', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    subtitle: const Text('خدمة العملاء والدردشة المباشرة (967737241475+)', style: TextStyle(fontSize: 11)),
-                    trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
-                    onTap: () => WhatsAppLauncher.openSupportChat(),
+                      const Divider(height: 1, indent: 16, endIndent: 16),
+                      ListTile(
+                        leading: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF25D366).withAlpha(30),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.support_agent_rounded, color: Color(0xFF25D366), size: 22),
+                        ),
+                        title: const Text('الدعم الفني عبر واتساب', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        subtitle: const Text('خدمة العملاء والدردشة المباشرة (967737241475+)', style: TextStyle(fontSize: 11)),
+                        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
+                        onTap: () => WhatsAppLauncher.openSupportChat(),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 32),

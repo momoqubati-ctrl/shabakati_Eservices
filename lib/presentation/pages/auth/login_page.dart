@@ -6,6 +6,7 @@ import '../../../data/models/user_account_model.dart';
 import '../../../logic/auth/auth_cubit.dart';
 import '../../../logic/auth/auth_state.dart';
 import '../../widgets/phone_input_field.dart';
+import '../privacy_policy_page.dart';
 import 'register_page.dart';
 
 class LoginPage extends StatefulWidget {
@@ -961,6 +962,24 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                         ),
                       ],
+                      const SizedBox(height: 8),
+                      TextButton.icon(
+                        icon: Icon(Icons.privacy_tip_outlined, size: 16, color: Colors.grey.shade600),
+                        label: Text(
+                          'سياسة الخصوصية وشروط الاستخدام',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const PrivacyPolicyPage()),
+                          );
+                        },
+                      ),
                     ],
                   ),
                 ),

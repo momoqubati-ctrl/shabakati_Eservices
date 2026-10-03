@@ -181,6 +181,12 @@ class CartPage extends StatelessWidget {
             customerPhone: effectivePhone,
             customerName: savedName.isNotEmpty ? savedName : 'عميل شبكتي',
             description: 'طلب خدمات شبكتي (${cartState.totalCount} عنصر)',
+            items: cartState.items
+                .map((item) => {
+                      'product_id': item.product.id,
+                      'quantity': item.quantity,
+                    })
+                .toList(),
           );
 
           if (!context.mounted) return;

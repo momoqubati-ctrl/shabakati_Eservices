@@ -5,6 +5,7 @@ import '../../../core/constants/country_codes.dart';
 import '../../../logic/auth/auth_cubit.dart';
 import '../../../logic/auth/auth_state.dart';
 import '../../widgets/phone_input_field.dart';
+import '../privacy_policy_page.dart';
 import 'otp_verification_page.dart';
 
 class RegisterPage extends StatefulWidget {
@@ -25,6 +26,7 @@ class _RegisterPageState extends State<RegisterPage> {
   String _selectedRegion = 'A'; // A: صنعاء, B: عدن
   bool _obscurePin = true;
   bool _obscureConfirmPin = true;
+  bool _agreedToPrivacyPolicy = false;
   bool _isNavigatingToOtp = false;
 
   @override
@@ -61,6 +63,10 @@ class _RegisterPageState extends State<RegisterPage> {
     }
     if (pin != confirmPin) {
       _showError('كلمة السر وتأكيدها غير متطابقين');
+      return;
+    }
+    if (!_agreedToPrivacyPolicy) {
+      _showError('يرجى الموافقة على سياسة الخصوصية وشروط الاستخدام للمتابعة');
       return;
     }
 
@@ -359,7 +365,87 @@ class _RegisterPageState extends State<RegisterPage> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 18),
+
+                    // خيار الموافقة على سياسة الخصوصية وشروط الاستخدام
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: _agreedToPrivacyPolicy
+                            ? colorScheme.primary.withAlpha(15)
+                            : theme.cardColor,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: _agreedToPrivacyPolicy
+                              ? colorScheme.primary.withAlpha(120)
+                              : colorScheme.outlineVariant.withAlpha(120),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: Checkbox(
+                              value: _agreedToPrivacyPolicy,
+                              onChanged: isLoading
+                                  ? null
+                                  : (val) => setState(() => _agreedToPrivacyPolicy = val ?? false),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Wrap(
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                GestureDetector(
+                                  onTap: isLoading
+                                      ? null
+                                      : () => setState(() => _agreedToPrivacyPolicy = !_agreedToPrivacyPolicy),
+                                  child: const Text(
+                                    'قرأت وأوافق على ',
+                                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500),
+                                  ),
+                                ),
+                                InkWell(
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(builder: (_) => const PrivacyPolicyPage()),
+                                    );
+                                  },
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 2),
+                                    child: Text(
+                                      'سياسة الخصوصية وشروط الاستخدام',
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: colorScheme.primary,
+                                        decoration: TextDecoration.underline,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'قراءة سياسة الخصوصية',
+                            icon: Icon(Icons.privacy_tip_outlined, size: 20, color: colorScheme.primary),
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const PrivacyPolicyPage()),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 22),
 
                     // زر تسجيل الحساب
                     SizedBox(
