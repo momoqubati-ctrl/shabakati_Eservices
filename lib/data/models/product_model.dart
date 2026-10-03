@@ -12,6 +12,8 @@ class ProductModel {
   final double? customPriceYer;
   final int? stockQuantity;
   final String? iconUrl;
+  final bool hasWarningNotice;
+  final String? warningNoticeMessage;
 
   ProductModel({
     required this.id,
@@ -25,6 +27,8 @@ class ProductModel {
     this.customPriceYer,
     this.stockQuantity,
     this.iconUrl,
+    this.hasWarningNotice = false,
+    this.warningNoticeMessage,
   });
 
   factory ProductModel.fromJson(
@@ -32,6 +36,8 @@ class ProductModel {
     double? customPriceYer,
     int? stockQuantity,
     String? iconUrl,
+    bool? hasWarningNotice,
+    String? warningNoticeMessage,
   }) {
     final effectiveIconUrl = iconUrl ?? json['icon_url'] ?? getDefaultIconUrl(json['sku'] ?? '', json['name'] ?? '');
     return ProductModel(
@@ -46,6 +52,8 @@ class ProductModel {
       customPriceYer: customPriceYer ?? (json['custom_price_yer'] != null ? (json['custom_price_yer'] as num).toDouble() : null),
       stockQuantity: stockQuantity ?? (json['stock_quantity'] as int?),
       iconUrl: effectiveIconUrl,
+      hasWarningNotice: hasWarningNotice ?? (json['has_warning_notice'] == true),
+      warningNoticeMessage: warningNoticeMessage ?? json['warning_notice_message'] as String?,
     );
   }
 
@@ -53,6 +61,8 @@ class ProductModel {
     double? customPriceYer,
     int? stockQuantity,
     String? iconUrl,
+    bool? hasWarningNotice,
+    String? warningNoticeMessage,
   }) {
     return ProductModel(
       id: id,
@@ -66,6 +76,8 @@ class ProductModel {
       customPriceYer: customPriceYer ?? this.customPriceYer,
       stockQuantity: stockQuantity ?? this.stockQuantity,
       iconUrl: iconUrl ?? this.iconUrl,
+      hasWarningNotice: hasWarningNotice ?? this.hasWarningNotice,
+      warningNoticeMessage: warningNoticeMessage ?? this.warningNoticeMessage,
     );
   }
 

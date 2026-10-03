@@ -7,6 +7,7 @@ class CheckoutWarningDialog extends StatefulWidget {
   final int itemsCount;
   final String? initialTelegramUser;
   final String? initialPhone;
+  final String? warningMessage;
   final Function(String telegramUser, String phone) onPayWithBasGate;
 
   const CheckoutWarningDialog({
@@ -17,6 +18,7 @@ class CheckoutWarningDialog extends StatefulWidget {
     required this.itemsCount,
     this.initialTelegramUser,
     this.initialPhone,
+    this.warningMessage,
     required this.onPayWithBasGate,
   });
 
@@ -26,12 +28,15 @@ class CheckoutWarningDialog extends StatefulWidget {
 
 class _CheckoutWarningDialogState extends State<CheckoutWarningDialog> {
   late final TextEditingController _phoneController;
-  bool _acceptedTerms = true;
+  late bool _acceptedTerms;
 
   @override
   void initState() {
     super.initState();
-    _phoneController = TextEditingController(text: widget.initialPhone ?? '');
+    // تفريغ حقل رقم الهاتف افتراضياً بناء على رغبة المستخدم
+    _phoneController = TextEditingController(text: '');
+    // إذا لم تكن هناك رسالة تنبيه مفعلة، تعتبر الشروط مقبولة تلقائياً
+    _acceptedTerms = widget.warningMessage == null || widget.warningMessage!.isEmpty;
   }
 
   @override
@@ -44,6 +49,7 @@ class _CheckoutWarningDialogState extends State<CheckoutWarningDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final bool hasWarning = widget.warningMessage != null && widget.warningMessage!.isNotEmpty;
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -78,43 +84,45 @@ class _CheckoutWarningDialogState extends State<CheckoutWarningDialog> {
               ),
               const SizedBox(height: 16),
 
-              // ⚠️ صندوق التنبيه الهام لمدة الـ 24 ساعة
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFEF3C7), // Amber 100
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFF59E0B), width: 1.2),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.access_time_filled_rounded, color: Color(0xFFB45309), size: 22),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Text(
-                            'تنبيه هام حول مدة التنفيذ:',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                              color: Color(0xFF92400E),
+              // ⚠️ صندوق التنبيه الهام (يظهر ديناميكياً فقط إذا كان مفعلاً لمنتجات السلة في لوحة التحكم)
+              if (hasWarning) ...[
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF3C7), // Amber 100
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFF59E0B), width: 1.2),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.access_time_filled_rounded, color: Color(0xFFB45309), size: 22),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'تنبيه هام حول مدة التنفيذ:',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: Color(0xFF92400E),
+                              ),
                             ),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            'بعض الاشتراكات والخدمات الرقمية تتطلب معالجة وتفعيلاً قد يستغرق مدة تصل إلى 24 ساعة كحد أقصى بعد إتمام عملية الدفع. في حال كان المفتاح متاحاً فورياً سيتم تسليمه لك في الحال مباشرة داخل التطبيق.',
-                            style: TextStyle(fontSize: 12, height: 1.45, color: Color(0xFF78350F)),
-                          ),
-                        ],
+                            const SizedBox(height: 4),
+                            Text(
+                              widget.warningMessage!,
+                              style: const TextStyle(fontSize: 12, height: 1.45, color: Color(0xFF78350F)),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
+              ],
 
               // ملخص المجموع بالريال اليمني والدولار المقابل
               Container(
@@ -167,18 +175,20 @@ class _CheckoutWarningDialogState extends State<CheckoutWarningDialog> {
               ),
               const SizedBox(height: 16),
 
-              // تأكيد فهم شرط الـ 24 ساعة
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                value: _acceptedTerms,
-                onChanged: (v) => setState(() => _acceptedTerms = v ?? true),
-                title: const Text(
-                  'أوافق على أن تنفيذ الطلب قد يستغرق حتى 24 ساعة للمنتجات التي تتطلب تفعيلاً يدوياً.',
-                  style: TextStyle(fontSize: 11.5, height: 1.3),
+              // تأكيد فهم شرط التنبيه (يظهر فقط إذا كان التنبيه مفعل ديناميكياً)
+              if (hasWarning) ...[
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: _acceptedTerms,
+                  onChanged: (v) => setState(() => _acceptedTerms = v ?? true),
+                  title: const Text(
+                    'أوافق على شرط ومدة تنفيذ الطلب الموضحة أعلاه.',
+                    style: TextStyle(fontSize: 11.5, height: 1.3),
+                  ),
+                  controlAffinity: ListTileControlAffinity.leading,
                 ),
-                controlAffinity: ListTileControlAffinity.leading,
-              ),
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
+              ],
 
               // زر الدفع المباشر عبر المحافظ الإلكترونية (BasGate)
               Container(

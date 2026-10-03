@@ -107,6 +107,25 @@ class CartPage extends StatelessWidget {
     final savedPhone = currentUser.accountNumber;
     final savedName = currentUser.fullName;
 
+    // فحص المنتجات التي تم تفعيل رسالة تنبيه لها من لوحة التحكم
+    final itemsWithWarning = cartState.items.where((it) => it.product.hasWarningNotice).toList();
+    String? dynamicWarningMessage;
+
+    if (itemsWithWarning.isNotEmpty) {
+      final customMessages = itemsWithWarning
+          .map((it) => it.product.warningNoticeMessage?.trim())
+          .where((msg) => msg != null && msg.isNotEmpty)
+          .toSet()
+          .toList();
+
+      if (customMessages.isNotEmpty) {
+        dynamicWarningMessage = customMessages.join('\n\n');
+      } else {
+        dynamicWarningMessage =
+            'بعض الاشتراكات والخدمات الرقمية في طلبك تتطلب معالجة وتفعيلاً قد يستغرق مدة تصل إلى 24 ساعة كحد أقصى بعد إتمام عملية الدفع. في حال كان المفتاح متاحاً فورياً سيتم تسليمه لك في الحال مباشرة داخل التطبيق.';
+      }
+    }
+
     if (!context.mounted) return;
 
     showDialog(
@@ -118,7 +137,8 @@ class CartPage extends StatelessWidget {
         displayYer: cartState.displayTotalYer(),
         itemsCount: cartState.totalCount,
         initialTelegramUser: savedTelegram,
-        initialPhone: savedPhone,
+        initialPhone: null,
+        warningMessage: dynamicWarningMessage,
         onPayWithBasGate: (telegramUser, phone) async {
           final ordersCubit = context.read<OrdersCubit>();
           final cartCubit = context.read<CartCubit>();

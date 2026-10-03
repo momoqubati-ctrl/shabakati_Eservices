@@ -9,7 +9,8 @@ import {
   AlertCircle,
   Package,
   TrendingUp,
-  Image as ImageIcon
+  Image as ImageIcon,
+  AlertTriangle
 } from 'lucide-react';
 import { DigitalVaultService } from '../services/digitalVaultService';
 import { supabase } from '../config/supabase';
@@ -73,7 +74,7 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
         setExchangeRate(Number(settings.usd_to_yer_rate));
       }
 
-      // 2. جلب أسعار البيع والكميات والأيقونات المخصصة لكل منتج
+      // 2. جلب أسعار البيع والكميات والأيقونات ورسائل التنبيه المخصصة لكل منتج
       const { data: productSettings } = await supabase
         .from('product_settings')
         .select('*');
@@ -86,6 +87,8 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
             stockQuantity: ps.stock_quantity !== null && ps.stock_quantity !== undefined ? ps.stock_quantity : '',
             isActive: ps.is_active ?? true,
             iconUrl: ps.icon_url || '',
+            hasWarningNotice: ps.has_warning_notice ?? false,
+            warningNoticeMessage: ps.warning_notice_message || '',
           };
         });
         setCustomPricing(pricingMap);
@@ -160,6 +163,8 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
     // إذا كان مخصصاً نحفظ الرقم، وإلا null لكي يبقى محتسباً آلياً في التطبيق
     const priceYerToSave = hasCustomVal ? Number(rawVal) : null;
     const effectiveIconUrl = custom.iconUrl || getDefaultIcon(product.sku, product.name);
+    const hasWarning = custom.hasWarningNotice ?? false;
+    const warningMsg = hasWarning ? (custom.warningNoticeMessage || '') : null;
 
     setSavingProductId(product.id);
     try {
@@ -173,6 +178,8 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
           stock_quantity: stockToSave,
           icon_url: effectiveIconUrl,
           is_active: custom.isActive ?? true,
+          has_warning_notice: hasWarning,
+          warning_notice_message: warningMsg,
           updated_at: new Date().toISOString()
         });
 
@@ -186,6 +193,8 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
           customPriceYer: priceYerToSave !== null ? priceYerToSave : '',
           stockQuantity: stockToSave !== null ? stockToSave : '',
           iconUrl: effectiveIconUrl,
+          hasWarningNotice: hasWarning,
+          warningNoticeMessage: hasWarning ? (custom.warningNoticeMessage || '') : '',
           saved: true
         }
       }));
@@ -197,7 +206,7 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
         }));
       }, 2000);
     } catch (e) {
-      alert('فشل حفظ سعر المنتج: ' + e.message);
+      alert('فشل حفظ إعدادات المنتج: ' + e.message);
     } finally {
       setSavingProductId(null);
     }
@@ -413,6 +422,70 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
                     <span className="font-bold text-slate-800 dark:text-slate-200">${costUsd.toFixed(2)} USD</span>
                     <span className="text-slate-400 block text-[10px]">({costYer.toLocaleString()} ر.ي)</span>
                   </div>
+                </div>
+
+                {/* قسم رسالة التنبيه للطلب (24 ساعة أو معالجة خاصة) */}
+                <div className="mt-3 p-3 bg-amber-50/70 dark:bg-amber-950/20 rounded-xl border border-amber-200/80 dark:border-amber-900/40">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={custom.hasWarningNotice ?? false}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setCustomPricing(prev => ({
+                            ...prev,
+                            [product.id]: {
+                              ...prev[product.id],
+                              hasWarningNotice: checked,
+                              warningNoticeMessage: checked 
+                                ? (prev[product.id]?.warningNoticeMessage || 'بعض الاشتراكات والخدمات الرقمية تتطلب معالجة وتفعيلاً قد يستغرق مدة تصل إلى 24 ساعة كحد أقصى بعد إتمام عملية الدفع. في حال كان المفتاح متاحاً فورياً سيتم تسليمه لك في الحال مباشرة داخل التطبيق.') 
+                                : ''
+                            }
+                          }));
+                        }}
+                        className="w-4 h-4 text-amber-600 rounded border-amber-300 focus:ring-amber-500 cursor-pointer"
+                      />
+                      <span className="text-xs font-bold text-amber-900 dark:text-amber-300 flex items-center gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                        <span>تفعيل رسالة تنبيه للطلب (24 ساعة)</span>
+                      </span>
+                    </label>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      custom.hasWarningNotice 
+                        ? 'bg-amber-200 text-amber-900 dark:bg-amber-900/60 dark:text-amber-200' 
+                        : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+                    }`}>
+                      {custom.hasWarningNotice ? 'مفعل بالتطبيق' : 'غير مفعل'}
+                    </span>
+                  </div>
+
+                  {custom.hasWarningNotice && (
+                    <div className="mt-2.5 space-y-1">
+                      <label className="block text-[11px] font-semibold text-amber-800 dark:text-amber-300">
+                        نص رسالة التنبيه المعروضة في التطبيق:
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={custom.warningNoticeMessage || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setCustomPricing(prev => ({
+                            ...prev,
+                            [product.id]: {
+                              ...prev[product.id],
+                              warningNoticeMessage: val
+                            }
+                          }));
+                        }}
+                        placeholder="أدخل رسالة التنبيه التي ستظهر في نافذة الدفع للعميل..."
+                        className="w-full p-2 text-xs rounded-lg bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-800/60 focus:outline-none focus:ring-1 focus:ring-amber-500 text-slate-800 dark:text-slate-200"
+                      />
+                      <p className="text-[10px] text-amber-700/80 dark:text-amber-400">
+                        ستظهر هذه الرسالة ومربع الموافقة في التطبيق فقط إذا كان هذا المنتج في السلة.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 

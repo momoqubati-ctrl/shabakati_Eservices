@@ -71,6 +71,8 @@ class ProductRepository implements IProductRepository {
           double? customYer;
           int? stock;
           String? iconUrl;
+          bool hasWarning = false;
+          String? warningMsg;
 
           if (customSetting != null) {
             if (customSetting['custom_price_yer'] != null) {
@@ -82,6 +84,12 @@ class ProductRepository implements IProductRepository {
             if (customSetting['icon_url'] != null && (customSetting['icon_url'] as String).isNotEmpty) {
               iconUrl = customSetting['icon_url'] as String;
             }
+            if (customSetting['has_warning_notice'] == true) {
+              hasWarning = true;
+            }
+            if (customSetting['warning_notice_message'] != null) {
+              warningMsg = customSetting['warning_notice_message'] as String;
+            }
           }
 
           return ProductModel.fromJson(
@@ -89,6 +97,8 @@ class ProductRepository implements IProductRepository {
             customPriceYer: customYer,
             stockQuantity: stock,
             iconUrl: iconUrl,
+            hasWarningNotice: hasWarning,
+            warningNoticeMessage: warningMsg,
           );
         }).toList();
       } else {
