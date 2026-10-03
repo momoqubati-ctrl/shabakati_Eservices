@@ -81,36 +81,19 @@ class OtpService {
     }
   }
 
-  /// التحقق من صحة رمز الـ OTP المدخل
+  /// التحقق من صحة رمز الـ OTP المدخل عبر دالة قاعدة البيانات المؤمنة (RPC)
   Future<bool> verifyOtp({
     required String phoneWithCode,
     required String enteredOtp,
   }) async {
     try {
-      final nowUtc = DateTime.now().toUtc().toIso8601String();
       final cleanPhone = sanitizePhoneNumber(phoneWithCode);
-
-      final res = await _supabase
-          .from('phone_otps')
-          .select('id, otp_code, expires_at')
-          .or('phone.eq.$phoneWithCode,phone.eq.$cleanPhone,phone.eq.+$cleanPhone')
-          .eq('otp_code', enteredOtp)
-          .eq('is_used', false)
-          .gte('expires_at', nowUtc)
-          .order('created_at', ascending: false)
-          .limit(1);
-
-      if (res.isNotEmpty) {
-        final otpId = res.first['id'];
-        // تعليم الرمز كمستخدم لمنع إعادة استخدامه
-        await _supabase.from('phone_otps').update({'is_used': true}).eq('id', otpId);
-
-        // تفعيل حساب المستخدم في جدول app_users
-        await _supabase.from('app_users').update({'is_verified': true}).or('account_number.eq.$phoneWithCode,account_number.eq.$cleanPhone,account_number.eq.+$cleanPhone');
-
-        return true;
-      }
-      return false;
+      final res = await _supabase.rpc('verify_phone_otp', params: {
+        'p_phone': phoneWithCode.trim(),
+        'p_clean_phone': cleanPhone,
+        'p_otp': enteredOtp.trim(),
+      });
+      return res == true;
     } catch (e) {
       debugPrint('Error verifying OTP: $e');
       return false;

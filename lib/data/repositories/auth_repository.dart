@@ -39,6 +39,13 @@ class AuthRepository implements IAuthRepository {
     return sha256.convert(bytes).toString();
   }
 
+  String _hashPinSalted(String accountNumber, String pin) {
+    final cleanAcc = accountNumber.trim();
+    final cleanPin = pin.trim();
+    final bytes = utf8.encode('$cleanAcc:$cleanPin:shabakti_sec_v1');
+    return sha256.convert(bytes).toString();
+  }
+
   @override
   Future<UserAccountModel> registerUser({
     required String dialCode,
@@ -48,53 +55,26 @@ class AuthRepository implements IAuthRepository {
     required String pin4Digits,
   }) async {
     final accountNumber = '$dialCode$phoneNational';
-    final passwordHash = _hashPin(pin4Digits);
+    final passwordHash = _hashPinSalted(accountNumber, pin4Digits);
 
-    // التحقق من وجود الحساب مسبقاً
-    final existing = await _supabase
-        .from('app_users')
-        .select('*')
-        .eq('account_number', accountNumber)
-        .maybeSingle();
+    final res = await _supabase.rpc('rpc_register_user', params: {
+      'p_account_number': accountNumber,
+      'p_dial_code': dialCode,
+      'p_phone_national': phoneNational,
+      'p_full_name': fullName,
+      'p_region': region,
+      'p_password_hash': passwordHash,
+    });
 
-    if (existing != null) {
-      if (existing['is_verified'] == true) {
-        throw Exception('رقم الحساب مسجل ومفعل مسبقاً. يرجى تسجيل الدخول مباشرة.');
-      } else {
-        // تحديث الحساب غير المفعل ببيانات جديدة
-        final updated = await _supabase
-            .from('app_users')
-            .update({
-              'full_name': fullName,
-              'region': region,
-              'password_hash': passwordHash,
-              'updated_at': DateTime.now().toUtc().toIso8601String(),
-            })
-            .eq('account_number', accountNumber)
-            .select()
-            .single();
+    final data = (res is Map<String, dynamic>)
+        ? res
+        : Map<String, dynamic>.from(res as Map);
 
-        return UserAccountModel.fromJson(updated);
-      }
+    if (data['error'] == 'ACCOUNT_ALREADY_VERIFIED') {
+      throw Exception('رقم الحساب مسجل ومفعل مسبقاً. يرجى تسجيل الدخول مباشرة.');
     }
 
-    // إدراج حساب جديد
-    final inserted = await _supabase
-        .from('app_users')
-        .insert({
-          'account_number': accountNumber,
-          'dial_code': dialCode,
-          'phone_national': phoneNational,
-          'full_name': fullName,
-          'region': region,
-          'password_hash': passwordHash,
-          'is_verified': false,
-          'biometric_enabled': false,
-        })
-        .select()
-        .single();
-
-    return UserAccountModel.fromJson(inserted);
+    return UserAccountModel.fromJson(data);
   }
 
   @override
@@ -102,11 +82,27 @@ class AuthRepository implements IAuthRepository {
     required String accountNumber,
     required String pin4Digits,
   }) async {
-    final passwordHash = _hashPin(pin4Digits);
-    return await loginWithStoredHash(
-      accountNumber: accountNumber,
-      passwordHash: passwordHash,
-    );
+    final saltedHash = _hashPinSalted(accountNumber, pin4Digits);
+    final legacyHash = _hashPin(pin4Digits);
+
+    final res = await _supabase.rpc('rpc_login_user', params: {
+      'p_account_number': accountNumber,
+      'p_password_hash': saltedHash,
+      'p_legacy_hash': legacyHash,
+    });
+
+    final data = (res is Map<String, dynamic>)
+        ? res
+        : Map<String, dynamic>.from(res as Map);
+
+    if (data['error'] == 'USER_NOT_FOUND') {
+      throw Exception('رقم الحساب غير مسجل في النظام. يرجى إنشاء حساب جديد أولاً.');
+    }
+    if (data['error'] == 'INVALID_PASSWORD') {
+      throw Exception('كلمة المرور غير صحيحة، يرجى التأكد وإعادة المحاولة.');
+    }
+
+    return UserAccountModel.fromJson(data);
   }
 
   @override
@@ -114,21 +110,24 @@ class AuthRepository implements IAuthRepository {
     required String accountNumber,
     required String passwordHash,
   }) async {
-    final user = await _supabase
-        .from('app_users')
-        .select('*')
-        .eq('account_number', accountNumber)
-        .maybeSingle();
+    final res = await _supabase.rpc('rpc_login_user', params: {
+      'p_account_number': accountNumber,
+      'p_password_hash': passwordHash,
+      'p_legacy_hash': null,
+    });
 
-    if (user == null) {
+    final data = (res is Map<String, dynamic>)
+        ? res
+        : Map<String, dynamic>.from(res as Map);
+
+    if (data['error'] == 'USER_NOT_FOUND') {
       throw Exception('رقم الحساب غير مسجل في النظام. يرجى إنشاء حساب جديد أولاً.');
     }
-
-    if (user['password_hash'] != passwordHash) {
-      throw Exception('كلمة المرور غير صحيحة، يرجى التأكد وإعادة المحاولة.');
+    if (data['error'] == 'INVALID_PASSWORD') {
+      throw Exception('انتهت صلاحية بيانات البصمة المحفوظة، يرجى الدخول بكلمة المرور.');
     }
 
-    return UserAccountModel.fromJson(user);
+    return UserAccountModel.fromJson(data);
   }
 
   @override
@@ -136,12 +135,9 @@ class AuthRepository implements IAuthRepository {
     required String accountNumber,
     required bool enabled,
   }) async {
-    await _supabase
-        .from('app_users')
-        .update({
-          'biometric_enabled': enabled,
-          'updated_at': DateTime.now().toUtc().toIso8601String(),
-        })
-        .eq('account_number', accountNumber);
+    await _supabase.rpc('rpc_update_biometric', params: {
+      'p_account_number': accountNumber,
+      'p_enabled': enabled,
+    });
   }
 }

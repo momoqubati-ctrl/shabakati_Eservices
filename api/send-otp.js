@@ -12,10 +12,15 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { phone, otp, message, channel = 'whatsapp' } = req.body || {};
+    const { phone, otp, channel = 'whatsapp' } = req.body || {};
 
     if (!phone) {
       return res.status(400).json({ success: false, error: 'Phone number is required' });
+    }
+
+    const cleanOtp = String(otp || '').trim();
+    if (!/^\d{4,6}$/.test(cleanOtp)) {
+      return res.status(400).json({ success: false, error: 'رمز التحقق غير صالح' });
     }
 
     // إزالة أي إشارة + أو مسافات أو رموز غير رقمية بشكل قاطع
@@ -30,6 +35,10 @@ export default async function handler(req, res) {
       cleanPhone = '967' + cleanPhone;
     }
 
+    if (cleanPhone.length < 9 || cleanPhone.length > 15) {
+      return res.status(400).json({ success: false, error: 'رقم الهاتف غير صالح' });
+    }
+
     const token = process.env.WHATSAPP_TOKEN || 
                   process.env.VITE_WHATSAPP_TOKEN || 
                   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiI5OGQ0MjI1ZTNhNzc4NjE4ZDdkZDcyNGFlOTI4M2ZiNiIsInJvbGUiOiJ1c2VyIiwiaWF0IjoxNzkwNTM5NTMzfQ.LBj3W0Kq2gIaaMIPwj8V-_sueQhesA812qj4Eyksv_s';
@@ -38,7 +47,8 @@ export default async function handler(req, res) {
                  process.env.VITE_WHATSAPP_FROM || 
                  '967737241475';
 
-    const text = message || `مرحباً بك في بوابة شبكتي للخدمات الرقمية.\n\nرمز التحقق لتسجيل حسابك هو:\n${otp}\n\nصالح لمدة 5 دقائق. لا تشارك هذا الرمز مع أي شخص.`;
+    // تقييد نص الرسالة بقالب التحقق الرسمي فقط لمنع إساءة الاستخدام كمرسل رسائل عشوائية (Anti-Spam)
+    const text = `مرحباً بك في بوابة شبكتي للخدمات الرقمية.\n\nرمز التحقق لتسجيل حسابك هو:\n${cleanOtp}\n\nصالح لمدة 5 دقائق. لا تشارك هذا الرمز مع أي شخص.`;
 
     const endpoint = 'https://whatsqubatibot-9x83.onrender.com/api/qr/rest/send_message';
 

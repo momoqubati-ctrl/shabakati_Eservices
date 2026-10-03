@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/config/api_config.dart';
 import '../../core/network/dio_client.dart';
 import '../models/product_model.dart';
 
@@ -12,6 +13,14 @@ abstract class IProductRepository {
 class ProductRepository implements IProductRepository {
   final DioClient dioClient;
   final SupabaseClient? supabaseClient;
+  final Dio _gatewayDio = Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 15),
+      sendTimeout: const Duration(seconds: 15),
+      headers: {'Accept': 'application/json'},
+    ),
+  );
   double _exchangeRate = 535.0;
 
   ProductRepository(this.dioClient, {this.supabaseClient});
@@ -51,16 +60,24 @@ class ProductRepository implements IProductRepository {
         } catch (_) {}
       }
 
-      // 3. جلب قائمة الخدمات من المزود
+      // 3. جلب قائمة الخدمات عبر بوابة الخادم المؤمنة (/api/catalog)
       final query = <String, dynamic>{'limit': limit};
       if (cursor != null) {
         query['cursor'] = cursor;
       }
 
-      final response = await dioClient.dio.get(
-        '/catalog/products',
-        queryParameters: query,
-      );
+      Response response;
+      try {
+        response = await _gatewayDio.get(
+          '${ApiConfig.vercelBackendUrl}/api/catalog',
+          queryParameters: query,
+        );
+      } catch (_) {
+        response = await dioClient.dio.get(
+          '/catalog/products',
+          queryParameters: query,
+        );
+      }
 
       if (response.statusCode == 200 && response.data['success'] == true) {
         final List items = response.data['data'] as List;
@@ -117,7 +134,15 @@ class ProductRepository implements IProductRepository {
   @override
   Future<ProductModel> getProductDetails(int productId) async {
     try {
-      final response = await dioClient.dio.get('/catalog/products/$productId');
+      Response response;
+      try {
+        response = await _gatewayDio.get(
+          '${ApiConfig.vercelBackendUrl}/api/catalog',
+          queryParameters: {'product_id': productId},
+        );
+      } catch (_) {
+        response = await dioClient.dio.get('/catalog/products/$productId');
+      }
       if (response.statusCode == 200 && response.data['success'] == true) {
         return ProductModel.fromJson(response.data['data']);
       }

@@ -14,7 +14,18 @@ export default async function handler(req, res) {
   }
 
   try {
-    const pathWithQuery = '/api/seller/v1/catalog/products?limit=50';
+    const { product_id, cursor, limit = '50' } = req.query || {};
+    let endpointSubPath = '';
+    if (product_id) {
+      endpointSubPath = `/catalog/products/${encodeURIComponent(product_id)}`;
+    } else {
+      const qs = new URLSearchParams();
+      qs.set('limit', String(limit));
+      if (cursor) qs.set('cursor', String(cursor));
+      endpointSubPath = `/catalog/products?${qs.toString()}`;
+    }
+
+    const pathWithQuery = `/api/seller/v1${endpointSubPath}`;
     const nowUtc = new Date().toISOString().split('.')[0] + 'Z';
     const nonce = crypto.randomBytes(16).toString('hex');
     const bodyHash = crypto.createHash('sha256').update('').digest('hex').toLowerCase();
@@ -33,7 +44,7 @@ export default async function handler(req, res) {
       .digest('hex')
       .toLowerCase();
 
-    const response = await fetch(`${BASE_URL}/catalog/products?limit=50`, {
+    const response = await fetch(`${BASE_URL}${endpointSubPath}`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',

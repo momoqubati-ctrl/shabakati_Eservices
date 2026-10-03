@@ -13,12 +13,12 @@ class ApiConfig {
   
   static const String keyId = String.fromEnvironment(
     'DIGITAL_VAULT_KEY_ID',
-    defaultValue: 'skey_01m37stgc9tpg5vsj5382rd8ra',
+    defaultValue: '',
   );
   
   static const String apiSecret = String.fromEnvironment(
     'DIGITAL_VAULT_API_SECRET',
-    defaultValue: 'ssec_96c632b8e715694af4b0fa62c8872cd2c99901fe0f13323c0cfb55251e335954',
+    defaultValue: '',
   );
   
   // WhatsApp Support Configuration

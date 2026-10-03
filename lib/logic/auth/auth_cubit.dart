@@ -60,8 +60,10 @@ class AuthCubit extends Cubit<AuthState> {
     }
   }
 
-  String _hashPin(String pin) {
-    final bytes = utf8.encode(pin.trim());
+  String _hashPinSalted(String accountNumber, String pin) {
+    final cleanAcc = accountNumber.trim();
+    final cleanPin = pin.trim();
+    final bytes = utf8.encode('$cleanAcc:$cleanPin:shabakti_sec_v1');
     return sha256.convert(bytes).toString();
   }
 
@@ -93,6 +95,19 @@ class AuthCubit extends Cubit<AuthState> {
       // فحص هل هذه أول مرة يدخل فيها بدون تفعيل البصمة
       final hasBiometric = await biometricService.isBiometricEnabled();
       final canBiometric = await biometricService.isBiometricAvailable();
+
+      if (hasBiometric) {
+        final savedAcc = await biometricService.getSavedAccount();
+        if (savedAcc == user.accountNumber) {
+          await biometricService.setBiometricEnabled(
+            enabled: true,
+            accountNumber: user.accountNumber,
+            passwordHash: _hashPinSalted(user.accountNumber, pin4Digits),
+            userName: user.fullName,
+            region: user.region,
+          );
+        }
+      }
 
       emit(AuthSuccess(
         user: user,
@@ -198,7 +213,7 @@ class AuthCubit extends Cubit<AuthState> {
     required UserAccountModel user,
     required String pin4Digits,
   }) async {
-    final hash = _hashPin(pin4Digits);
+    final hash = _hashPinSalted(user.accountNumber, pin4Digits);
     await biometricService.setBiometricEnabled(
       enabled: true,
       accountNumber: user.accountNumber,

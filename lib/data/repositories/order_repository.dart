@@ -83,14 +83,41 @@ class OrderRepository implements IOrderRepository {
     String? providerError;
 
     try {
-      // 1. إرسال الطلب لـ Digital Vault Seller API
-      final response = await dioClient.dio.post(
-        '/orders',
-        data: {
-          'external_order_id': externalOrderId,
-          'items': payloadItems,
-        },
-      );
+      // 1. إرسال الطلب عبر بوابة الخادم المؤمنة (/api/orders) أو المزود الاحتياطي
+      Response response;
+      try {
+        response = await _gatewayDio.post(
+          '${ApiConfig.vercelBackendUrl}/api/orders',
+          data: {
+            'external_order_id': externalOrderId,
+            'items': items.map((e) => {
+              'product_id': e.product.id,
+              'product_name': e.product.name,
+              'quantity': e.quantity,
+              'unit_price_cents': e.product.sellerPrice.amountCents,
+              'currency': e.product.sellerPrice.currency,
+            }).toList(),
+            'device_id': deviceId,
+            'telegram_user': telegramUser,
+            'contact_phone': contactPhone,
+            'contact_email': contactEmail,
+            'payment_id': paymentId,
+            'payment_reference': paymentReference ?? paymentId,
+            'payment_method': paymentMethod ?? 'المحافظ الإلكترونية',
+            'wallet_name': walletName,
+            'user_id': userId,
+            'account_number': accountNumber,
+          },
+        );
+      } catch (_) {
+        response = await dioClient.dio.post(
+          '/orders',
+          data: {
+            'external_order_id': externalOrderId,
+            'items': payloadItems,
+          },
+        );
+      }
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = response.data['data'] as Map<String, dynamic>;
@@ -102,14 +129,23 @@ class OrderRepository implements IOrderRepository {
           currency = data['total']['currency'] ?? currency;
         }
 
-        // 2. إذا كان التسليم فوري ومكتمل (ready)، نقوم باستهلاك المفتاح الرقمي فوراً
-        if (fulfillmentStatus == 'ready' && sellerOrderId != null) {
+        if (data['delivered_key'] != null && data['delivered_key'].toString().isNotEmpty) {
+          deliveredKey = data['delivered_key'].toString();
+          fulfillmentStatus = 'ready';
+          orderStatus = 'completed';
+          if (secureStorageService != null) {
+            await secureStorageService!.saveDeliveredAsset(externalOrderId, deliveredKey, deliveredUrl);
+          }
+        } else if (fulfillmentStatus == 'ready' && sellerOrderId != null) {
+          // 2. إذا كان التسليم فوري ومكتمل (ready)، نقوم باستهلاك المفتاح الرقمي فوراً
           final assets = await _consumeDelivery(sellerOrderId);
           deliveredKey = assets['key'];
           deliveredUrl = assets['url'];
-          orderStatus = 'completed';
-          if (secureStorageService != null && deliveredKey != null && deliveredKey.isNotEmpty) {
-            await secureStorageService!.saveDeliveredAsset(externalOrderId, deliveredKey, deliveredUrl);
+          if (deliveredKey != null && deliveredKey.isNotEmpty) {
+            orderStatus = 'completed';
+            if (secureStorageService != null) {
+              await secureStorageService!.saveDeliveredAsset(externalOrderId, deliveredKey, deliveredUrl);
+            }
           }
         }
         isVaultSuccess = true;
@@ -183,7 +219,39 @@ class OrderRepository implements IOrderRepository {
 
   Future<Map<String, dynamic>> _consumeDelivery(int sellerOrderId) async {
     try {
-      // طلب access token للتسليم
+      // 1. المحاولة الأساسية عبر بوابة الخادم المؤمنة
+      final gwRes = await _gatewayDio.get(
+        '${ApiConfig.vercelBackendUrl}/api/orders?seller_order_id=$sellerOrderId&action=consume_key',
+      );
+      if (gwRes.statusCode == 200 && gwRes.data is Map) {
+        final assets = gwRes.data['data']?['assets'] as List?;
+        if (assets != null && assets.isNotEmpty) {
+          final keys = <String>[];
+          String? firstUrl;
+          final rawAssets = <Map<String, dynamic>>[];
+          for (final item in assets) {
+            final val = item['value']?.toString();
+            final itemUrl = item['url']?.toString();
+            if (val != null && val.isNotEmpty) keys.add(val);
+            firstUrl ??= itemUrl;
+            rawAssets.add({
+              'type': item['type']?.toString() ?? 'key',
+              'value': val ?? '',
+            });
+          }
+          if (keys.isNotEmpty) {
+            return {
+              'key': keys.join('\n'),
+              'url': firstUrl,
+              'rawAssets': rawAssets,
+            };
+          }
+        }
+      }
+    } catch (_) {}
+
+    try {
+      // 2. المحاولة الاحتياطية المباشرة
       final tokenRes = await dioClient.dio.post(
         '/orders/$sellerOrderId/delivery-access',
         data: {},
@@ -274,6 +342,13 @@ class OrderRepository implements IOrderRepository {
   }) async {
     if (supabaseClient == null) return;
     try {
+      final existing = await supabaseClient!
+          .from('orders')
+          .select('id')
+          .eq('external_order_id', order.externalOrderId)
+          .maybeSingle();
+      if (existing != null) return;
+
       final deliveredAssets = order.deliveredKey != null
           ? [
               for (final k in order.deliveredKey!.split('\n').where((k) => k.isNotEmpty))

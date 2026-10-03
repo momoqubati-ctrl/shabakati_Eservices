@@ -2,6 +2,8 @@ import crypto from 'crypto';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://enutfwspwrzpvhmtgftl.supabase.co';
 const SUPABASE_ANON = process.env.SUPABASE_PUBLISHABLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVudXRmd3Nwd3J6cHZobXRnZnRsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxODE3ODQsImV4cCI6MjEwNTc1Nzc4NH0.dRgwtfHV1OYWxeFKDon030mwesEIx_993cOQiAABTRs';
+const SUPABASE_SERVICE_ROLE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVudXRmd3Nwd3J6cHZobXRnZnRsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MDE4MTc4NCwiZXhwIjoyMTA1NzU3Nzg0fQ.c4xQmTbu0dS2lxewsnYtQ6ih5vNlbwpBm4v2nv2F73g';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || SUPABASE_SERVICE_ROLE;
 
 function generateBasGateSignature(input, secretKey) {
   let payloadStr = typeof input === 'string' ? input : JSON.stringify(input);
@@ -51,15 +53,15 @@ export default async function handler(req, res) {
     // 1. جلب سجل الدفع من Supabase
     let url = `${SUPABASE_URL}/rest/v1/payments?select=*`;
     if (payment_id) {
-      url += `&id=eq.${payment_id}`;
+      url += `&id=eq.${encodeURIComponent(payment_id)}`;
     } else {
-      url += `&external_order_id=eq.${order_id}`;
+      url += `&external_order_id=eq.${encodeURIComponent(order_id)}`;
     }
 
     const payRes = await fetch(url, {
       headers: {
-        'apikey': SUPABASE_ANON,
-        'Authorization': `Bearer ${SUPABASE_ANON}`
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`
       }
     });
 
@@ -234,11 +236,11 @@ export default async function handler(req, res) {
     }
 
     // 5. تحديث السجل في Supabase مع رقم المرجع واسم المحفظة
-    await fetch(`${SUPABASE_URL}/rest/v1/payments?id=eq.${payment.id}`, {
+    await fetch(`${SUPABASE_URL}/rest/v1/payments?id=eq.${encodeURIComponent(payment.id)}`, {
       method: 'PATCH',
       headers: {
-        'apikey': SUPABASE_ANON,
-        'Authorization': `Bearer ${SUPABASE_ANON}`,
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
         'Content-Type': 'application/json',
         'Prefer': 'return=minimal'
       },
@@ -254,8 +256,8 @@ export default async function handler(req, res) {
     await fetch(`${SUPABASE_URL}/rest/v1/payment_logs`, {
       method: 'POST',
       headers: {
-        'apikey': SUPABASE_ANON,
-        'Authorization': `Bearer ${SUPABASE_ANON}`,
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
         'Content-Type': 'application/json',
         'Prefer': 'return=minimal'
       },

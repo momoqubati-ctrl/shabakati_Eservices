@@ -160,6 +160,66 @@ export default async function handler(req, res) {
     const { items, external_order_id, device_id, telegram_user, contact_phone, contact_email, payment_id, payment_reference, payment_method, wallet_name, user_id, account_number } = req.body || {};
     const externalId = external_order_id || `ord_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
+    // التحقق الأمني من صحة الدفع ومنع إعادة استخدام نفس عملية الدفع (Replay Attack Protection)
+    let verifiedPaymentRef = payment_reference || null;
+    let verifiedWalletName = wallet_name || null;
+
+    if (payment_id) {
+      const pCheckRes = await fetch(`${SUPABASE_URL}/rest/v1/payments?id=eq.${encodeURIComponent(payment_id)}&select=id,status,payment_reference,wallet_name`, {
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`
+        }
+      });
+      if (pCheckRes.ok) {
+        const pRows = await pCheckRes.json();
+        if (!pRows || pRows.length === 0 || pRows[0].status !== 'completed') {
+          return res.status(403).json({
+            success: false,
+            error: 'عملية الدفع غير مكتملة أو غير موثقة في النظام'
+          });
+        }
+        verifiedPaymentRef = verifiedPaymentRef || pRows[0].payment_reference || payment_id;
+        verifiedWalletName = verifiedWalletName || pRows[0].wallet_name || null;
+      }
+
+      const replayRes = await fetch(`${SUPABASE_URL}/rest/v1/orders?payment_id=eq.${encodeURIComponent(payment_id)}&select=id,external_order_id`, {
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`
+        }
+      });
+      if (replayRes.ok) {
+        const existingOrders = await replayRes.json();
+        if (Array.isArray(existingOrders) && existingOrders.some(o => o.external_order_id !== externalId)) {
+          return res.status(409).json({
+            success: false,
+            error: 'تم استخدام مرجع عملية الدفع هذا مسبقاً لطلب آخر'
+          });
+        }
+      }
+    } else if (external_order_id) {
+      // السماح فقط إذا كان الطلب موجوداً مسبقاً في قاعدة البيانات (مثل إعادة التنفيذ من لوحة الأدمن)
+      const ordCheckRes = await fetch(`${SUPABASE_URL}/rest/v1/orders?external_order_id=eq.${encodeURIComponent(external_order_id)}&select=id`, {
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`
+        }
+      });
+      const ordRows = ordCheckRes.ok ? await ordCheckRes.json() : [];
+      if (!Array.isArray(ordRows) || ordRows.length === 0) {
+        return res.status(403).json({
+          success: false,
+          error: 'معرف عملية الدفع المؤكدة مطلوب لإنشاء طلب جديد'
+        });
+      }
+    } else {
+      return res.status(403).json({
+        success: false,
+        error: 'معرف عملية الدفع المؤكدة مطلوب لإنشاء طلب جديد'
+      });
+    }
+
     const orderPayload = {
       external_order_id: externalId,
       items: (items || []).map(i => ({
@@ -221,25 +281,8 @@ export default async function handler(req, res) {
 
     // 3. الحفظ في Supabase
     try {
-      let resolvedRef = payment_reference || null;
-      let resolvedWallet = wallet_name || null;
-      if (payment_id && (!resolvedRef || !resolvedWallet)) {
-        try {
-          const pRes = await fetch(`${SUPABASE_URL}/rest/v1/payments?id=eq.${payment_id}&select=payment_reference,wallet_name`, {
-            headers: {
-              'apikey': SUPABASE_KEY,
-              'Authorization': `Bearer ${SUPABASE_KEY}`
-            }
-          });
-          if (pRes.ok) {
-            const pRows = await pRes.json();
-            if (pRows?.[0]) {
-              resolvedRef = resolvedRef || pRows[0].payment_reference || payment_id;
-              resolvedWallet = resolvedWallet || pRows[0].wallet_name || null;
-            }
-          }
-        } catch (_) {}
-      }
+      const resolvedRef = verifiedPaymentRef;
+      const resolvedWallet = verifiedWalletName;
 
       const orderRecord = {
         external_order_id: externalId,
@@ -288,8 +331,8 @@ export default async function handler(req, res) {
           await fetch(`${SUPABASE_URL}/rest/v1/order_items`, {
             method: 'POST',
             headers: {
-              'apikey': SUPABASE_ANON,
-              'Authorization': `Bearer ${SUPABASE_ANON}`,
+              'apikey': SUPABASE_KEY,
+              'Authorization': `Bearer ${SUPABASE_KEY}`,
               'Content-Type': 'application/json'
             },
             body: JSON.stringify(itemsPayload)
