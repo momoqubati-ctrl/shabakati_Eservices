@@ -176,6 +176,458 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  Future<void> _showForgotPasswordFlow() async {
+    final cubit = context.read<AuthCubit>();
+    final resetPhoneController = TextEditingController(text: _phoneController.text.trim());
+    final otpController = TextEditingController();
+    final newPinController = TextEditingController();
+    final confirmPinController = TextEditingController();
+
+    CountryCodeModel resetCountry = _selectedCountry;
+    int step = 1; // 1: إدخال رقم الحساب، 2: تأكيد رمز OTP، 3: كلمة المرور الجديدة وتأكيدها
+    String resolvedAccount = '';
+    bool isBusy = false;
+    bool obscureNew = true;
+    bool obscureConfirm = true;
+    String? errorMessage;
+    String? infoMessage;
+
+    final resetSuccess = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final theme = Theme.of(ctx);
+          final colorScheme = theme.colorScheme;
+
+          String stepTitle = 'نسيت كلمة المرور';
+          if (step == 2) stepTitle = 'تأكيد رمز التحقق (OTP)';
+          if (step == 3) stepTitle = 'تعيين كلمة مرور جديدة';
+
+          return Directionality(
+            textDirection: TextDirection.rtl,
+            child: AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      step == 1
+                          ? Icons.lock_reset_rounded
+                          : (step == 2 ? Icons.sms_outlined : Icons.vpn_key_rounded),
+                      color: colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      stepTitle,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                  ),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: SizedBox(
+                  width: 360,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (errorMessage != null) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          margin: const EdgeInsets.only(bottom: 14),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.red.shade200),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.error_outline_rounded, color: Colors.red.shade700, size: 18),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  errorMessage!,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.red.shade800,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      if (infoMessage != null) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          margin: const EdgeInsets.only(bottom: 14),
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.green.shade200),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.check_circle_outline_rounded, color: Colors.green.shade700, size: 18),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  infoMessage!,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.green.shade800,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
+                      // المرحلة 1: إدخال رقم الحساب لإرسال OTP
+                      if (step == 1) ...[
+                        Text(
+                          'أدخل رقم الحساب (رقم الهاتف المسجل) لإرسال رمز التحقق (OTP) واستعادة كلمة المرور:',
+                          style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700, height: 1.4),
+                        ),
+                        const SizedBox(height: 16),
+                        PhoneInputField(
+                          controller: resetPhoneController,
+                          enabled: !isBusy,
+                          initialCountry: resetCountry,
+                          labelText: 'رقم الحساب (رقم الهاتف)',
+                          onCountryChanged: (c) => setDialogState(() => resetCountry = c),
+                        ),
+                      ],
+
+                      // المرحلة 2: إدخال وتأكيد رمز التحقق OTP
+                      if (step == 2) ...[
+                        Text(
+                          'تم إرسال رمز التحقق المكون من 4 أرقام إلى رقم حسابك:',
+                          style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700, height: 1.4),
+                        ),
+                        const SizedBox(height: 6),
+                        Directionality(
+                          textDirection: TextDirection.ltr,
+                          child: Text(
+                            resolvedAccount,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: colorScheme.primary,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'رمز التحقق (4 أرقام)',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                        ),
+                        const SizedBox(height: 6),
+                        Directionality(
+                          textDirection: TextDirection.ltr,
+                          child: TextFormField(
+                            controller: otpController,
+                            enabled: !isBusy,
+                            keyboardType: TextInputType.number,
+                            textAlign: TextAlign.center,
+                            maxLength: 4,
+                            autofocus: true,
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 12,
+                              color: colorScheme.primary,
+                            ),
+                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                            decoration: InputDecoration(
+                              hintText: '----',
+                              counterText: '',
+                              filled: true,
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            TextButton.icon(
+                              icon: const Icon(Icons.refresh_rounded, size: 16),
+                              label: const Text('إعادة إرسال واتساب', style: TextStyle(fontSize: 11.5)),
+                              onPressed: isBusy
+                                  ? null
+                                  : () async {
+                                      setDialogState(() {
+                                        isBusy = true;
+                                        errorMessage = null;
+                                        infoMessage = null;
+                                      });
+                                      await cubit.resendOtp(
+                                        phoneWithCode: resolvedAccount,
+                                        channel: 'whatsapp',
+                                      );
+                                      if (ctx.mounted) {
+                                        setDialogState(() {
+                                          isBusy = false;
+                                          infoMessage = 'تمت إعادة إرسال رمز التحقق عبر واتساب';
+                                        });
+                                      }
+                                    },
+                            ),
+                            TextButton.icon(
+                              icon: const Icon(Icons.sms_outlined, size: 16),
+                              label: const Text('إرسال عبر SMS', style: TextStyle(fontSize: 11.5)),
+                              onPressed: isBusy
+                                  ? null
+                                  : () async {
+                                      setDialogState(() {
+                                        isBusy = true;
+                                        errorMessage = null;
+                                        infoMessage = null;
+                                      });
+                                      await cubit.resendOtp(
+                                        phoneWithCode: resolvedAccount,
+                                        channel: 'sms',
+                                      );
+                                      if (ctx.mounted) {
+                                        setDialogState(() {
+                                          isBusy = false;
+                                          infoMessage = 'تم إرسال رمز التحقق عبر رسالة SMS';
+                                        });
+                                      }
+                                    },
+                            ),
+                          ],
+                        ),
+                      ],
+
+                      // المرحلة 3: نافذة إدخال كلمة مرور جديدة وتأكيد كلمة المرور الجديدة
+                      if (step == 3) ...[
+                        Text(
+                          'تم تأكيد رمز التحقق بنجاح. يرجى إدخال كلمة المرور الجديدة (4 أرقام) وتأكيدها:',
+                          style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700, height: 1.4),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'كلمة المرور الجديدة (4 أرقام)',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                        ),
+                        const SizedBox(height: 6),
+                        TextFormField(
+                          controller: newPinController,
+                          enabled: !isBusy,
+                          keyboardType: TextInputType.number,
+                          obscureText: obscureNew,
+                          maxLength: 4,
+                          autofocus: true,
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          decoration: InputDecoration(
+                            hintText: '••••',
+                            counterText: '',
+                            prefixIcon: const Icon(Icons.lock_outline_rounded),
+                            suffixIcon: IconButton(
+                              icon: Icon(obscureNew ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                              onPressed: () => setDialogState(() => obscureNew = !obscureNew),
+                            ),
+                            filled: true,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        const Text(
+                          'تأكيد كلمة المرور الجديدة (4 أرقام)',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                        ),
+                        const SizedBox(height: 6),
+                        TextFormField(
+                          controller: confirmPinController,
+                          enabled: !isBusy,
+                          keyboardType: TextInputType.number,
+                          obscureText: obscureConfirm,
+                          maxLength: 4,
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          decoration: InputDecoration(
+                            hintText: '••••',
+                            counterText: '',
+                            prefixIcon: const Icon(Icons.verified_user_outlined),
+                            suffixIcon: IconButton(
+                              icon: Icon(obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                              onPressed: () => setDialogState(() => obscureConfirm = !obscureConfirm),
+                            ),
+                            filled: true,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isBusy ? null : () => Navigator.pop(ctx, false),
+                  child: const Text('إلغاء'),
+                ),
+                FilledButton.icon(
+                  icon: isBusy
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : Icon(
+                          step == 1
+                              ? Icons.send_rounded
+                              : (step == 2 ? Icons.verified_rounded : Icons.check_circle_outline_rounded),
+                          size: 18,
+                        ),
+                  label: Text(
+                    step == 1
+                        ? 'إرسال رمز التحقق'
+                        : (step == 2 ? 'تأكيد الرمز' : 'حفظ كلمة المرور الجديدة'),
+                  ),
+                  onPressed: isBusy
+                      ? null
+                      : () async {
+                          if (step == 1) {
+                            final phone = resetPhoneController.text.trim();
+                            if (phone.isEmpty) {
+                              setDialogState(() => errorMessage = 'يرجى إدخال رقم الحساب / الهاتف');
+                              return;
+                            }
+                            final fullAcc = '${resetCountry.dialCode}$phone';
+                            setDialogState(() {
+                              isBusy = true;
+                              errorMessage = null;
+                              infoMessage = null;
+                            });
+                            try {
+                              final acc = await cubit.sendPasswordResetOtp(
+                                accountNumber: fullAcc,
+                                channel: 'whatsapp',
+                              );
+                              if (ctx.mounted) {
+                                setDialogState(() {
+                                  isBusy = false;
+                                  resolvedAccount = acc;
+                                  step = 2;
+                                });
+                              }
+                            } catch (e) {
+                              if (ctx.mounted) {
+                                setDialogState(() {
+                                  isBusy = false;
+                                  errorMessage = e.toString().replaceAll('Exception: ', '');
+                                });
+                              }
+                            }
+                          } else if (step == 2) {
+                            final otp = otpController.text.trim();
+                            if (otp.length != 4) {
+                              setDialogState(() => errorMessage = 'يرجى إدخال رمز التحقق المكون من 4 أرقام');
+                              return;
+                            }
+                            setDialogState(() {
+                              isBusy = true;
+                              errorMessage = null;
+                              infoMessage = null;
+                            });
+                            try {
+                              final valid = await cubit.verifyPasswordResetOtp(
+                                accountNumber: resolvedAccount,
+                                enteredOtp: otp,
+                              );
+                              if (!ctx.mounted) return;
+                              if (valid) {
+                                setDialogState(() {
+                                  isBusy = false;
+                                  step = 3;
+                                  errorMessage = null;
+                                  infoMessage = null;
+                                });
+                              } else {
+                                setDialogState(() {
+                                  isBusy = false;
+                                  errorMessage = 'رمز التحقق غير صحيح أو انتهت صلاحيته';
+                                });
+                              }
+                            } catch (e) {
+                              if (ctx.mounted) {
+                                setDialogState(() {
+                                  isBusy = false;
+                                  errorMessage = e.toString().replaceAll('Exception: ', '');
+                                });
+                              }
+                            }
+                          } else if (step == 3) {
+                            final newPin = newPinController.text.trim();
+                            final confirmPin = confirmPinController.text.trim();
+                            if (newPin.length != 4) {
+                              setDialogState(() => errorMessage = 'يرجى إدخال كلمة المرور الجديدة (4 أرقام)');
+                              return;
+                            }
+                            if (confirmPin.length != 4 || newPin != confirmPin) {
+                              setDialogState(() => errorMessage = 'كلمة المرور الجديدة وتأكيدها غير متطابقين');
+                              return;
+                            }
+                            setDialogState(() {
+                              isBusy = true;
+                              errorMessage = null;
+                            });
+                            try {
+                              await cubit.resetPasswordWithVerifiedOtp(
+                                accountNumber: resolvedAccount,
+                                newPin4Digits: newPin,
+                              );
+                              if (ctx.mounted) {
+                                setState(() {
+                                  _selectedCountry = resetCountry;
+                                  _phoneController.text = resetPhoneController.text.trim();
+                                  _pinController.clear();
+                                });
+                                Navigator.pop(ctx, true);
+                              }
+                            } catch (e) {
+                              if (ctx.mounted) {
+                                setDialogState(() {
+                                  isBusy = false;
+                                  errorMessage = e.toString().replaceAll('Exception: ', '');
+                                });
+                              }
+                            }
+                          }
+                        },
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+
+    if (resetSuccess == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('تم تعيين كلمة المرور الجديدة بنجاح! يمكنك الآن تسجيل الدخول.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -385,9 +837,30 @@ class _LoginPageState extends State<LoginPage> {
                               ),
                             ),
                           ),
+                          const SizedBox(height: 6),
+                          Align(
+                            alignment: AlignmentDirectional.centerEnd,
+                            child: TextButton.icon(
+                              onPressed: isLoading ? null : _showForgotPasswordFlow,
+                              icon: Icon(Icons.lock_reset_rounded, size: 17, color: colorScheme.primary),
+                              label: Text(
+                                'نسيت كلمة المرور؟',
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: colorScheme.primary,
+                                ),
+                              ),
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                            ),
+                          ),
                         ],
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 18),
 
                       // زر تسجيل الدخول
                       Row(

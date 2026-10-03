@@ -329,6 +329,92 @@ class AuthCubit extends Cubit<AuthState> {
     }
   }
 
+  /// تغيير كلمة المرور للمستخدم المسجل حالياً
+  Future<void> changePassword({
+    required String oldPin4Digits,
+    required String newPin4Digits,
+  }) async {
+    final user = currentUser ?? await secureStorageService.getActiveUser();
+    if (user == null) {
+      throw Exception('يرجى تسجيل الدخول أولاً لتغيير كلمة المرور.');
+    }
+
+    await authRepository.changePassword(
+      accountNumber: user.accountNumber,
+      oldPin4Digits: oldPin4Digits,
+      newPin4Digits: newPin4Digits,
+    );
+
+    // تحديث الهاش المحفوظ للبصمة إذا كانت مفعلة لنفس الحساب
+    final hasBiometric = await biometricService.isBiometricEnabled();
+    if (hasBiometric) {
+      final savedAcc = await biometricService.getSavedAccount();
+      if (savedAcc == user.accountNumber) {
+        await biometricService.setBiometricEnabled(
+          enabled: true,
+          accountNumber: user.accountNumber,
+          passwordHash: _hashPinSalted(user.accountNumber, newPin4Digits),
+          userName: user.fullName,
+          region: user.region,
+        );
+      }
+    }
+  }
+
+  /// التحقق من وجود رقم الحساب وإرسال رمز OTP لاستعادة كلمة المرور
+  Future<String> sendPasswordResetOtp({
+    required String accountNumber,
+    String channel = 'whatsapp',
+  }) async {
+    final resolvedAccount = await authRepository.checkAccountExists(
+      accountNumber: accountNumber,
+    );
+
+    await otpService.sendOtp(
+      phoneWithCode: resolvedAccount,
+      channel: channel,
+    );
+
+    return resolvedAccount;
+  }
+
+  /// التحقق من رمز OTP الخاص باستعادة كلمة المرور
+  Future<bool> verifyPasswordResetOtp({
+    required String accountNumber,
+    required String enteredOtp,
+  }) async {
+    return await otpService.verifyOtp(
+      phoneWithCode: accountNumber,
+      enteredOtp: enteredOtp,
+    );
+  }
+
+  /// تعيين كلمة مرور جديدة بعد التحقق من رمز OTP بنجاح
+  Future<void> resetPasswordWithVerifiedOtp({
+    required String accountNumber,
+    required String newPin4Digits,
+  }) async {
+    final cleanPhone = otpService.sanitizePhoneNumber(accountNumber);
+    await authRepository.resetPassword(
+      accountNumber: accountNumber,
+      cleanPhone: cleanPhone,
+      newPin4Digits: newPin4Digits,
+    );
+
+    // إذا كانت البصمة مفعلة محلياً لنفس الحساب، نحدث الهاش المخزن ليتطابق مع كلمة المرور الجديدة
+    final hasBiometric = await biometricService.isBiometricEnabled();
+    if (hasBiometric) {
+      final savedAcc = await biometricService.getSavedAccount();
+      if (savedAcc == accountNumber) {
+        await biometricService.setBiometricEnabled(
+          enabled: true,
+          accountNumber: accountNumber,
+          passwordHash: _hashPinSalted(accountNumber, newPin4Digits),
+        );
+      }
+    }
+  }
+
   /// تسجيل الخروج العادي
   Future<void> logout() async {
     await secureStorageService.clearActiveUser();

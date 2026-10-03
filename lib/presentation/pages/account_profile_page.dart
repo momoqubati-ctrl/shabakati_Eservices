@@ -269,6 +269,249 @@ class _AccountProfilePageState extends State<AccountProfilePage> {
     }
   }
 
+  Future<void> _showChangePasswordDialog(BuildContext context, AuthCubit cubit) async {
+    final oldPinController = TextEditingController();
+    final newPinController = TextEditingController();
+    final confirmPinController = TextEditingController();
+
+    bool obscureOld = true;
+    bool obscureNew = true;
+    bool obscureConfirm = true;
+    bool isSubmitting = false;
+    String? errorMessage;
+
+    final changed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final theme = Theme.of(ctx);
+          final colorScheme = theme.colorScheme;
+
+          return Directionality(
+            textDirection: TextDirection.rtl,
+            child: AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(Icons.lock_reset_rounded, color: colorScheme.primary),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'تغيير كلمة المرور',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                  ),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'يرجى إدخال كلمة المرور القديمة ثم إدخال كلمة المرور الجديدة المكونة من 4 أرقام وتأكيدها:',
+                      style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700, height: 1.4),
+                    ),
+                    const SizedBox(height: 16),
+
+                    if (errorMessage != null) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        margin: const EdgeInsets.only(bottom: 14),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.red.shade200),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.error_outline_rounded, color: Colors.red.shade700, size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                errorMessage!,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.red.shade800,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    // 1. كلمة المرور القديمة
+                    const Text(
+                      'كلمة المرور القديمة (4 أرقام)',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                    ),
+                    const SizedBox(height: 6),
+                    TextFormField(
+                      controller: oldPinController,
+                      enabled: !isSubmitting,
+                      keyboardType: TextInputType.number,
+                      obscureText: obscureOld,
+                      maxLength: 4,
+                      autofocus: true,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: InputDecoration(
+                        hintText: '••••',
+                        counterText: '',
+                        prefixIcon: const Icon(Icons.lock_outline_rounded),
+                        suffixIcon: IconButton(
+                          icon: Icon(obscureOld ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                          onPressed: () => setDialogState(() => obscureOld = !obscureOld),
+                        ),
+                        filled: true,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // 2. كلمة المرور الجديدة
+                    const Text(
+                      'كلمة المرور الجديدة (4 أرقام)',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                    ),
+                    const SizedBox(height: 6),
+                    TextFormField(
+                      controller: newPinController,
+                      enabled: !isSubmitting,
+                      keyboardType: TextInputType.number,
+                      obscureText: obscureNew,
+                      maxLength: 4,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: InputDecoration(
+                        hintText: '••••',
+                        counterText: '',
+                        prefixIcon: const Icon(Icons.vpn_key_outlined),
+                        suffixIcon: IconButton(
+                          icon: Icon(obscureNew ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                          onPressed: () => setDialogState(() => obscureNew = !obscureNew),
+                        ),
+                        filled: true,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // 3. تأكيد كلمة المرور الجديدة
+                    const Text(
+                      'تأكيد كلمة المرور الجديدة (4 أرقام)',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                    ),
+                    const SizedBox(height: 6),
+                    TextFormField(
+                      controller: confirmPinController,
+                      enabled: !isSubmitting,
+                      keyboardType: TextInputType.number,
+                      obscureText: obscureConfirm,
+                      maxLength: 4,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: InputDecoration(
+                        hintText: '••••',
+                        counterText: '',
+                        prefixIcon: const Icon(Icons.verified_user_outlined),
+                        suffixIcon: IconButton(
+                          icon: Icon(obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                          onPressed: () => setDialogState(() => obscureConfirm = !obscureConfirm),
+                        ),
+                        filled: true,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSubmitting ? null : () => Navigator.pop(ctx, false),
+                  child: const Text('إلغاء'),
+                ),
+                FilledButton.icon(
+                  icon: isSubmitting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.check_circle_outline_rounded, size: 18),
+                  label: const Text('حفظ كلمة المرور'),
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          final oldPin = oldPinController.text.trim();
+                          final newPin = newPinController.text.trim();
+                          final confirmPin = confirmPinController.text.trim();
+
+                          if (oldPin.length != 4) {
+                            setDialogState(() => errorMessage = 'يرجى إدخال كلمة المرور القديمة (4 أرقام)');
+                            return;
+                          }
+                          if (newPin.length != 4) {
+                            setDialogState(() => errorMessage = 'يرجى إدخال كلمة المرور الجديدة (4 أرقام)');
+                            return;
+                          }
+                          if (confirmPin.length != 4 || newPin != confirmPin) {
+                            setDialogState(() => errorMessage = 'كلمة المرور الجديدة وتأكيدها غير متطابقين');
+                            return;
+                          }
+                          if (oldPin == newPin) {
+                            setDialogState(() => errorMessage = 'كلمة المرور الجديدة يجب أن تختلف عن القديمة');
+                            return;
+                          }
+
+                          setDialogState(() {
+                            isSubmitting = true;
+                            errorMessage = null;
+                          });
+
+                          try {
+                            await cubit.changePassword(
+                              oldPin4Digits: oldPin,
+                              newPin4Digits: newPin,
+                            );
+                            if (ctx.mounted) {
+                              Navigator.pop(ctx, true);
+                            }
+                          } catch (e) {
+                            if (ctx.mounted) {
+                              setDialogState(() {
+                                isSubmitting = false;
+                                errorMessage = e.toString().replaceAll('Exception: ', '');
+                              });
+                            }
+                          }
+                        },
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+
+    if (changed == true && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('تم تغيير كلمة المرور بنجاح!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
+
   Future<void> _confirmFinalLogout(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -541,6 +784,21 @@ class _AccountProfilePageState extends State<AccountProfilePage> {
                         subtitle: const Text('تفعيل المصادقة الحيوية للدخول السريع وتمديد الجلسة', style: TextStyle(fontSize: 11)),
                         value: _isBiometricEnabled,
                         onChanged: (val) => _handleBiometricToggle(val, cubit, user),
+                      ),
+                      const Divider(height: 1, indent: 16, endIndent: 16),
+                      ListTile(
+                        leading: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: colorScheme.primaryContainer,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(Icons.lock_reset_rounded, color: colorScheme.primary, size: 22),
+                        ),
+                        title: const Text('تغيير كلمة المرور', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        subtitle: const Text('تحديث كلمة السر الخاصة بحسابك (4 أرقام)', style: TextStyle(fontSize: 11)),
+                        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
+                        onTap: () => _showChangePasswordDialog(context, cubit),
                       ),
                     ],
                   ),

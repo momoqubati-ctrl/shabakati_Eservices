@@ -26,6 +26,22 @@ abstract class IAuthRepository {
     required String accountNumber,
     required bool enabled,
   });
+
+  Future<void> changePassword({
+    required String accountNumber,
+    required String oldPin4Digits,
+    required String newPin4Digits,
+  });
+
+  Future<String> checkAccountExists({
+    required String accountNumber,
+  });
+
+  Future<void> resetPassword({
+    required String accountNumber,
+    required String cleanPhone,
+    required String newPin4Digits,
+  });
 }
 
 class AuthRepository implements IAuthRepository {
@@ -139,5 +155,79 @@ class AuthRepository implements IAuthRepository {
       'p_account_number': accountNumber,
       'p_enabled': enabled,
     });
+  }
+
+  @override
+  Future<void> changePassword({
+    required String accountNumber,
+    required String oldPin4Digits,
+    required String newPin4Digits,
+  }) async {
+    final oldSalted = _hashPinSalted(accountNumber, oldPin4Digits);
+    final oldLegacy = _hashPin(oldPin4Digits);
+    final newSalted = _hashPinSalted(accountNumber, newPin4Digits);
+
+    final res = await _supabase.rpc('rpc_change_password', params: {
+      'p_account_number': accountNumber,
+      'p_old_hash': oldSalted,
+      'p_old_legacy_hash': oldLegacy,
+      'p_new_hash': newSalted,
+    });
+
+    final data = (res is Map<String, dynamic>)
+        ? res
+        : Map<String, dynamic>.from(res as Map);
+
+    if (data['error'] == 'USER_NOT_FOUND') {
+      throw Exception('لم يتم العثور على الحساب في النظام.');
+    }
+    if (data['error'] == 'INVALID_OLD_PASSWORD') {
+      throw Exception('كلمة المرور القديمة غير صحيحة، يرجى التأكد وإعادة المحاولة.');
+    }
+  }
+
+  @override
+  Future<String> checkAccountExists({
+    required String accountNumber,
+  }) async {
+    final res = await _supabase.rpc('rpc_check_account_exists', params: {
+      'p_account_number': accountNumber.trim(),
+    });
+
+    final data = (res is Map<String, dynamic>)
+        ? res
+        : Map<String, dynamic>.from(res as Map);
+
+    if (data['exists'] != true) {
+      throw Exception('رقم الحساب غير مسجل في النظام، يرجى التأكد من الرقم المدخل.');
+    }
+
+    return data['account_number']?.toString() ?? accountNumber.trim();
+  }
+
+  @override
+  Future<void> resetPassword({
+    required String accountNumber,
+    required String cleanPhone,
+    required String newPin4Digits,
+  }) async {
+    final newSalted = _hashPinSalted(accountNumber, newPin4Digits);
+
+    final res = await _supabase.rpc('rpc_reset_password', params: {
+      'p_account_number': accountNumber.trim(),
+      'p_clean_phone': cleanPhone.trim(),
+      'p_new_hash': newSalted,
+    });
+
+    final data = (res is Map<String, dynamic>)
+        ? res
+        : Map<String, dynamic>.from(res as Map);
+
+    if (data['error'] == 'USER_NOT_FOUND') {
+      throw Exception('رقم الحساب غير مسجل في النظام.');
+    }
+    if (data['error'] == 'OTP_NOT_VERIFIED') {
+      throw Exception('انتهت صلاحية جلسة التحقق (OTP)، يرجى إعادة طلب الرمز.');
+    }
   }
 }
