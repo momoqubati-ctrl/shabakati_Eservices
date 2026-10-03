@@ -124,9 +124,12 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
     try {
       let deliveredAssets = null;
 
-      // محاولة 1: عبر خادم الباك إند /api/orders?action=consume_key
+      // محاولة 1: عبر خادم الباك إند /api/orders?action=consume_key مع ترويسة جلسة الأدمن
       try {
-        const apiRes = await fetch(`/api/orders?action=consume_key&seller_order_id=${activeSellerOrderId}`);
+        const authHeaders = await DigitalVaultService.getAuthHeaders();
+        const apiRes = await fetch(`/api/orders?action=consume_key&seller_order_id=${activeSellerOrderId}`, {
+          headers: authHeaders
+        });
         if (apiRes.ok) {
           const apiData = await apiRes.json();
           const rawAssets = apiData?.data?.assets;
@@ -140,19 +143,16 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
         }
       } catch (_) {}
 
-      // محاولة 2: عبر الاتصال المباشر بمزود Digital Vault
+      // محاولة 2: عبر خدمة المزود المؤمنة
       if (!deliveredAssets || deliveredAssets.length === 0) {
         const tokenRes = await DigitalVaultService.requestDeliveryAccess(activeSellerOrderId);
-        if (tokenRes?.success && tokenRes?.data?.access_token) {
-          const consumeRes = await DigitalVaultService.consumeDeliveryAccess(tokenRes.data.access_token);
-          const rawAssets = consumeRes?.data?.assets;
-          if (Array.isArray(rawAssets) && rawAssets.length > 0) {
-            deliveredAssets = rawAssets.map(a => ({
-              type: a.type || 'key',
-              value: a.value || '',
-              ...(a.url ? { url: a.url } : {})
-            })).filter(a => a.value);
-          }
+        const rawAssets = tokenRes?.data?.assets;
+        if (Array.isArray(rawAssets) && rawAssets.length > 0) {
+          deliveredAssets = rawAssets.map(a => ({
+            type: a.type || 'key',
+            value: a.value || '',
+            ...(a.url ? { url: a.url } : {})
+          })).filter(a => a.value);
         }
       }
 
@@ -178,9 +178,10 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
         } catch (_) {}
 
         try {
+          const authHeaders = await DigitalVaultService.getAuthHeaders();
           await fetch('/api/orders', {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
+            headers: authHeaders,
             body: JSON.stringify({
               id: currentOrder.id,
               external_order_id: currentOrder.external_order_id,
@@ -236,9 +237,10 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
       } catch (_) {}
 
       try {
+        const authHeaders = await DigitalVaultService.getAuthHeaders();
         await fetch('/api/orders', {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders,
           body: JSON.stringify({
             id: currentOrder.id,
             external_order_id: currentOrder.external_order_id,
@@ -329,9 +331,11 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
 
         // إذا لم يكن المفتاح مسحوباً ومحفوظاً لدينا بعد، نقوم بطلب وسحب المفتاح الرقمي من المزود فوراً
         if (!hasKeys) {
-          // محاولة 1: عبر الباك إند API
           try {
-            const apiRes = await fetch(`/api/orders?action=consume_key&seller_order_id=${activeSellerOrderId}`);
+            const authHeaders = await DigitalVaultService.getAuthHeaders();
+            const apiRes = await fetch(`/api/orders?action=consume_key&seller_order_id=${activeSellerOrderId}`, {
+              headers: authHeaders
+            });
             if (apiRes.ok) {
               const apiData = await apiRes.json();
               const rawAssets = apiData?.data?.assets;
@@ -345,27 +349,6 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
               }
             }
           } catch (_) {}
-
-          // محاولة 2: الاتصال المباشر
-          if (!hasKeys) {
-            try {
-              const tokenRes = await DigitalVaultService.requestDeliveryAccess(activeSellerOrderId);
-              if (tokenRes?.success && tokenRes?.data?.access_token) {
-                const consumeRes = await DigitalVaultService.consumeDeliveryAccess(tokenRes.data.access_token);
-                const rawAssets = consumeRes?.data?.assets;
-                if (Array.isArray(rawAssets) && rawAssets.length > 0) {
-                  deliveredAssets = rawAssets.map(a => ({
-                    type: a.type || 'key',
-                    value: a.value || '',
-                    ...(a.url ? { url: a.url } : {})
-                  })).filter(a => a.value);
-                  hasKeys = deliveredAssets.length > 0;
-                }
-              }
-            } catch (consumeErr) {
-              console.warn('Auto consume delivery on check error:', consumeErr);
-            }
-          }
         }
 
         // تحديث قاعدة بيانات Supabase وتغيير حالة الطلب إلى مكتمل وحفظ الأكواد المسحوبة
@@ -392,9 +375,10 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
         } catch (_) {}
 
         try {
+          const authHeaders = await DigitalVaultService.getAuthHeaders();
           await fetch('/api/orders', {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
+            headers: authHeaders,
             body: JSON.stringify({
               id: currentOrder.id,
               external_order_id: currentOrder.external_order_id,
@@ -488,56 +472,54 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
       // ج) إذا كانت حالة التسليم جاهزة (ready)، نسحب الكود والمفتاح فوراً
       if (orderData?.success && orderData?.data?.fulfillment_status === 'ready') {
         const tokenRes = await DigitalVaultService.requestDeliveryAccess(activeSellerOrderId);
-        if (tokenRes?.success && tokenRes?.data?.access_token) {
-          const consumeRes = await DigitalVaultService.consumeDeliveryAccess(tokenRes.data.access_token);
-          const rawAssets = consumeRes?.data?.assets;
-          if (Array.isArray(rawAssets) && rawAssets.length > 0) {
-            const deliveredAssets = rawAssets.map(a => ({
-              type: a.type || 'key',
-              value: a.value || '',
-              ...(a.url ? { url: a.url } : {})
-            })).filter(a => a.value);
+        const rawAssets = tokenRes?.data?.assets;
+        if (Array.isArray(rawAssets) && rawAssets.length > 0) {
+          const deliveredAssets = rawAssets.map(a => ({
+            type: a.type || 'key',
+            value: a.value || '',
+            ...(a.url ? { url: a.url } : {})
+          })).filter(a => a.value);
 
-            if (deliveredAssets.length > 0) {
-              const execPayload = {
-                seller_order_id: activeSellerOrderId,
-                fulfillment_status: 'ready',
-                status: 'completed',
-                delivered_assets: deliveredAssets,
-                updated_at: new Date().toISOString()
-              };
+          if (deliveredAssets.length > 0) {
+            const execPayload = {
+              seller_order_id: activeSellerOrderId,
+              fulfillment_status: 'ready',
+              status: 'completed',
+              delivered_assets: deliveredAssets,
+              updated_at: new Date().toISOString()
+            };
 
-              try {
-                await supabase
-                  .from('orders')
-                  .update(execPayload)
-                  .eq('id', currentOrder.id);
-              } catch (_) {}
+            try {
+              await supabase
+                .from('orders')
+                .update(execPayload)
+                .eq('id', currentOrder.id);
+            } catch (_) {}
 
-              try {
-                await fetch('/api/orders', {
-                  method: 'PATCH',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    id: currentOrder.id,
-                    external_order_id: currentOrder.external_order_id,
-                    ...execPayload
-                  })
-                });
-              } catch (_) {}
+            try {
+              const authHeaders = await DigitalVaultService.getAuthHeaders();
+              await fetch('/api/orders', {
+                method: 'PATCH',
+                headers: authHeaders,
+                body: JSON.stringify({
+                  id: currentOrder.id,
+                  external_order_id: currentOrder.external_order_id,
+                  ...execPayload
+                })
+              });
+            } catch (_) {}
 
-              const updated = {
-                ...currentOrder,
-                ...execPayload
-              };
+            const updated = {
+              ...currentOrder,
+              ...execPayload
+            };
 
-              setCurrentOrder(updated);
+            setCurrentOrder(updated);
 
-              const keysSummary = deliveredAssets.map(a => a.value).join(', ');
-              setSyncMessage(`✅ تم تنفيذ الطلب لدى المزود وسحب المفتاح الرقمي بنجاح (${deliveredAssets.length} عنصر): ${keysSummary}`);
-              if (onOrderUpdated) onOrderUpdated(updated);
-              return;
-            }
+            const keysSummary = deliveredAssets.map(a => a.value).join(', ');
+            setSyncMessage(`✅ تم تنفيذ الطلب لدى المزود وسحب المفتاح الرقمي بنجاح (${deliveredAssets.length} عنصر): ${keysSummary}`);
+            if (onOrderUpdated) onOrderUpdated(updated);
+            return;
           }
         }
       }
@@ -577,9 +559,10 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
       } catch (_) {}
 
       try {
+        const authHeaders = await DigitalVaultService.getAuthHeaders();
         await fetch('/api/orders', {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders,
           body: JSON.stringify({
             id: currentOrder.id,
             external_order_id: currentOrder.external_order_id,

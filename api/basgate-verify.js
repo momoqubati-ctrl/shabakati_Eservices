@@ -1,9 +1,30 @@
 import crypto from 'crypto';
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://enutfwspwrzpvhmtgftl.supabase.co';
-const SUPABASE_ANON = process.env.SUPABASE_PUBLISHABLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVudXRmd3Nwd3J6cHZobXRnZnRsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxODE3ODQsImV4cCI6MjEwNTc1Nzc4NH0.dRgwtfHV1OYWxeFKDon030mwesEIx_993cOQiAABTRs';
-const SUPABASE_SERVICE_ROLE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVudXRmd3Nwd3J6cHZobXRnZnRsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MDE4MTc4NCwiZXhwIjoyMTA1NzU3Nzg0fQ.c4xQmTbu0dS2lxewsnYtQ6ih5vNlbwpBm4v2nv2F73g';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || SUPABASE_SERVICE_ROLE;
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://enutfwspwrzpvhmtgftl.supabase.co';
+const SUPABASE_ANON = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVudXRmd3Nwd3J6cHZobXRnZnRsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxODE3ODQsImV4cCI6MjEwNTc1Nzc4NH0.dRgwtfHV1OYWxeFKDon030mwesEIx_993cOQiAABTRs';
+
+async function getServerSecrets() {
+  if (globalThis.__shabaktiSecretsCache) return globalThis.__shabaktiSecretsCache;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/rpc_get_backend_secrets`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_ANON,
+        'Authorization': `Bearer ${SUPABASE_ANON}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ p_handshake: process.env.SERVER_HANDSHAKE_KEY || 'shabakti_srv_vault_handshake_2026_v1' })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && typeof data === 'object') {
+        globalThis.__shabaktiSecretsCache = data;
+        return data;
+      }
+    }
+  } catch (_) {}
+  return {};
+}
 
 function generateBasGateSignature(input, secretKey) {
   let payloadStr = typeof input === 'string' ? input : JSON.stringify(input);
@@ -50,6 +71,12 @@ export default async function handler(req, res) {
       return res.status(400).json({ success: false, error: 'معرف الدفع أو رقم الطلب مطلوب' });
     }
 
+    const secrets = await getServerSecrets();
+    const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY;
+    if (!SUPABASE_KEY) {
+      return res.status(500).json({ success: false, error: 'إعدادات الخادم غير مكتملة' });
+    }
+
     // 1. جلب سجل الدفع من Supabase
     let url = `${SUPABASE_URL}/rest/v1/payments?select=*`;
     if (payment_id) {
@@ -71,7 +98,7 @@ export default async function handler(req, res) {
     }
 
     const payment = payments[0];
-    if (payment.status === 'completed') {
+    if (payment.status === 'completed' || payment.status === 'consumed') {
       return res.status(200).json({
         success: true,
         outcome: 'SUCCESS',
@@ -84,32 +111,13 @@ export default async function handler(req, res) {
       });
     }
 
-    const mode = 'live';
-    const isLive = true;
+    const appId = process.env.BASGATE_LIVE_APP_ID || process.env.BASGATE_APP_ID || secrets.BASGATE_LIVE_APP_ID;
+    const clientId = process.env.BASGATE_LIVE_CLIENT_ID || process.env.BASGATE_CLIENT_ID || secrets.BASGATE_LIVE_CLIENT_ID;
+    const clientSecret = process.env.BASGATE_LIVE_CLIENT_SECRET || process.env.BASGATE_CLIENT_SECRET || secrets.BASGATE_LIVE_CLIENT_SECRET;
+    const mKey = process.env.BASGATE_LIVE_MKEY || process.env.BASGATE_MKEY || secrets.BASGATE_LIVE_MKEY || clientSecret;
 
-    const appId = isLive
-      ? (process.env.BASGATE_LIVE_APP_ID || process.env.BASGATE_APP_ID || 'dcb2583d-a276-478c-a70b-77463f1fc3e5')
-      : (process.env.BASGATE_TEST_APP_ID || 'de14eba9-6272-4c23-86c3-40b592816ebc');
-
-    const clientId = isLive
-      ? (process.env.BASGATE_LIVE_CLIENT_ID || process.env.BASGATE_CLIENT_ID || '384d0f26-fa84-4c23-9aaa-2e17efb1860e')
-      : (process.env.BASGATE_TEST_CLIENT_ID || '273c2f8d-1f10-490f-8da7-d58785d627d2');
-
-    const clientSecret = isLive
-      ? (process.env.BASGATE_LIVE_CLIENT_SECRET || process.env.BASGATE_CLIENT_SECRET || '773c4cbb-5896-4ead-8070-61d988d7c8d1')
-      : (process.env.BASGATE_TEST_CLIENT_SECRET || '9ddad294-7c6c-444a-9859-0613ea6c2da4');
-
-    const mKey = isLive
-      ? (process.env.BASGATE_LIVE_MKEY || process.env.BASGATE_MKEY || '---aUdFMztJdFQ4YMLSfZhEUQ')
-      : (process.env.BASGATE_TEST_MKEY || clientSecret);
-
-    const authUrl = isLive
-      ? (process.env.BASGATE_LIVE_AUTH_URL || 'https://app.basgate.com/api/v1/auth/token')
-      : (process.env.BASGATE_TEST_AUTH_URL || 'https://api-tst.basgate.com/api/v1/auth/token');
-
-    const statusUrl = isLive
-      ? (process.env.BASGATE_LIVE_STATUS_URL || 'https://app.basgate.com/api/v1/merchant/sdk-payment/get-transaction-status')
-      : (process.env.BASGATE_TEST_STATUS_URL || 'https://api-tst.basgate.com/api/v1/merchant/sdk-payment/get-transaction-status');
+    const authUrl = process.env.BASGATE_LIVE_AUTH_URL || 'https://app.basgate.com/api/v1/auth/token';
+    const statusUrl = process.env.BASGATE_LIVE_STATUS_URL || 'https://app.basgate.com/api/v1/merchant/sdk-payment/get-transaction-status';
 
     // 2. طلب Access Token
     const formData = new URLSearchParams();
@@ -129,7 +137,7 @@ export default async function handler(req, res) {
     if (!tokenRes.ok) {
       return res.status(502).json({
         success: false,
-        error: 'فشل التوثيق مع بوابة BasGate للتحقق من المعاملة'
+        error: 'فشل التوثيق مع بوابة الدفع للتحقق من المعاملة'
       });
     }
 
@@ -144,9 +152,7 @@ export default async function handler(req, res) {
       requestTimestamp: timestampMs
     };
     const bodyJson = JSON.stringify(bodyDict);
-    const signature = isLive
-      ? generateBasGateSignature(bodyJson, mKey)
-      : 'QDY0UVc1NzYzckFXYW9zMg==';
+    const signature = generateBasGateSignature(bodyJson, mKey);
 
     const statusRes = await fetch(statusUrl, {
       method: 'POST',
@@ -205,7 +211,6 @@ export default async function handler(req, res) {
     const paymentStatusName = String(dataBody.paymentStatusName ?? '').toLowerCase();
 
     // 4. تقييم نتيجة المعاملة بناءً على معايير BasGate الرسمية
-    // النجاح الحقيقي: 1202
     const isSuccess = paymentStatus === 1202;
     const isPending = (apiStatus === 1 && apiCode === '1111') && (
       paymentStatus === 1201 || 
@@ -248,11 +253,19 @@ export default async function handler(req, res) {
         status: finalStatus,
         payment_reference: extractedRef,
         wallet_name: extractedWalletName,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        metadata: {
+          ...(payment.metadata || {}),
+          verify_outcome: outcome,
+          payment_status_code: paymentStatus,
+          payment_reference: extractedRef,
+          wallet_name: extractedWalletName,
+          sdk_result_status,
+          sdk_message
+        }
       })
     });
 
-    // 6. لوج التحقق
     await fetch(`${SUPABASE_URL}/rest/v1/payment_logs`, {
       method: 'POST',
       headers: {
@@ -268,9 +281,7 @@ export default async function handler(req, res) {
           outcome,
           paymentStatus,
           trxStatus,
-          payment_reference: extractedRef,
-          wallet_name: extractedWalletName,
-          rawResponse
+          sdk_result_status
         }
       })
     });
@@ -278,22 +289,21 @@ export default async function handler(req, res) {
     return res.status(200).json({
       success: isSuccess,
       outcome,
-      status: finalStatus,
+      is_pending: isPending,
       payment_id: payment.id,
       payment_reference: extractedRef,
       payment_method: 'المحافظ الإلكترونية',
       wallet_name: extractedWalletName,
-      trx_id: dataBody.trxId || null,
+      order_id: payment.external_order_id,
+      status: finalStatus,
       payment_status_code: paymentStatus,
-      message: userMessage,
-      raw_details: rawResponse
+      message: userMessage
     });
   } catch (error) {
-    console.error('Verify error:', error);
+    console.error('Verify error:', error.message);
     return res.status(500).json({
       success: false,
-      error: 'خطأ أثناء التحقق من عملية الدفع',
-      details: error.message
+      error: 'حدث خطأ أثناء التحقق من حالة الدفع'
     });
   }
 }

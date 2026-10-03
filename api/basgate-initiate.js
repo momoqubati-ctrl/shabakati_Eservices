@@ -1,9 +1,30 @@
 import crypto from 'crypto';
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://enutfwspwrzpvhmtgftl.supabase.co';
-const SUPABASE_ANON = process.env.SUPABASE_PUBLISHABLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVudXRmd3Nwd3J6cHZobXRnZnRsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxODE3ODQsImV4cCI6MjEwNTc1Nzc4NH0.dRgwtfHV1OYWxeFKDon030mwesEIx_993cOQiAABTRs';
-const SUPABASE_SERVICE_ROLE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVudXRmd3Nwd3J6cHZobXRnZnRsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MDE4MTc4NCwiZXhwIjoyMTA1NzU3Nzg0fQ.c4xQmTbu0dS2lxewsnYtQ6ih5vNlbwpBm4v2nv2F73g';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || SUPABASE_SERVICE_ROLE;
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://enutfwspwrzpvhmtgftl.supabase.co';
+const SUPABASE_ANON = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVudXRmd3Nwd3J6cHZobXRnZnRsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxODE3ODQsImV4cCI6MjEwNTc1Nzc4NH0.dRgwtfHV1OYWxeFKDon030mwesEIx_993cOQiAABTRs';
+
+async function getServerSecrets() {
+  if (globalThis.__shabaktiSecretsCache) return globalThis.__shabaktiSecretsCache;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/rpc_get_backend_secrets`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_ANON,
+        'Authorization': `Bearer ${SUPABASE_ANON}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ p_handshake: process.env.SERVER_HANDSHAKE_KEY || 'shabakti_srv_vault_handshake_2026_v1' })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && typeof data === 'object') {
+        globalThis.__shabaktiSecretsCache = data;
+        return data;
+      }
+    }
+  } catch (_) {}
+  return {};
+}
 
 function generateBasGateSignature(input, secretKey) {
   let payloadStr = typeof input === 'string' ? input : JSON.stringify(input);
@@ -30,13 +51,13 @@ function generateBasGateSignature(input, secretKey) {
   return encrypted;
 }
 
-async function insertSupabase(table, data) {
+async function insertSupabase(table, data, supabaseKey) {
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
       method: 'POST',
       headers: {
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'apikey': supabaseKey,
+        'Authorization': `Bearer ${supabaseKey}`,
         'Content-Type': 'application/json',
         'Prefer': 'return=representation'
       },
@@ -44,7 +65,7 @@ async function insertSupabase(table, data) {
     });
     return await res.json().catch(() => null);
   } catch (e) {
-    console.warn(`Supabase insert error on ${table}:`, e);
+    console.warn(`Supabase insert error on ${table}:`, e.message);
     return null;
   }
 }
@@ -76,32 +97,26 @@ export default async function handler(req, res) {
       return res.status(400).json({ success: false, error: 'المبلغ غير صالح لإتمام عملية الدفع' });
     }
 
+    const secrets = await getServerSecrets();
+    const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY;
+
     const mode = 'live';
     const isLive = true;
 
-    const appId = isLive
-      ? (process.env.BASGATE_LIVE_APP_ID || process.env.BASGATE_APP_ID || 'dcb2583d-a276-478c-a70b-77463f1fc3e5')
-      : (process.env.BASGATE_TEST_APP_ID || 'de14eba9-6272-4c23-86c3-40b592816ebc');
+    const appId = process.env.BASGATE_LIVE_APP_ID || process.env.BASGATE_APP_ID || secrets.BASGATE_LIVE_APP_ID;
+    const clientId = process.env.BASGATE_LIVE_CLIENT_ID || process.env.BASGATE_CLIENT_ID || secrets.BASGATE_LIVE_CLIENT_ID;
+    const clientSecret = process.env.BASGATE_LIVE_CLIENT_SECRET || process.env.BASGATE_CLIENT_SECRET || secrets.BASGATE_LIVE_CLIENT_SECRET;
+    const mKey = process.env.BASGATE_LIVE_MKEY || process.env.BASGATE_MKEY || secrets.BASGATE_LIVE_MKEY || clientSecret;
 
-    const clientId = isLive
-      ? (process.env.BASGATE_LIVE_CLIENT_ID || process.env.BASGATE_CLIENT_ID || '384d0f26-fa84-4c23-9aaa-2e17efb1860e')
-      : (process.env.BASGATE_TEST_CLIENT_ID || '273c2f8d-1f10-490f-8da7-d58785d627d2');
+    const authUrl = process.env.BASGATE_LIVE_AUTH_URL || 'https://app.basgate.com/api/v1/auth/token';
+    const initiateUrl = process.env.BASGATE_LIVE_INITIATE_URL || 'https://app.basgate.com/api/v1/merchant/sdk-payment/initiate-transaction';
 
-    const clientSecret = isLive
-      ? (process.env.BASGATE_LIVE_CLIENT_SECRET || process.env.BASGATE_CLIENT_SECRET || '773c4cbb-5896-4ead-8070-61d988d7c8d1')
-      : (process.env.BASGATE_TEST_CLIENT_SECRET || '9ddad294-7c6c-444a-9859-0613ea6c2da4');
-
-    const mKey = isLive
-      ? (process.env.BASGATE_LIVE_MKEY || process.env.BASGATE_MKEY || '---aUdFMztJdFQ4YMLSfZhEUQ')
-      : (process.env.BASGATE_TEST_MKEY || clientSecret);
-
-    const authUrl = isLive
-      ? (process.env.BASGATE_LIVE_AUTH_URL || 'https://app.basgate.com/api/v1/auth/token')
-      : (process.env.BASGATE_TEST_AUTH_URL || 'https://api-tst.basgate.com/api/v1/auth/token');
-
-    const initiateUrl = isLive
-      ? (process.env.BASGATE_LIVE_INITIATE_URL || 'https://app.basgate.com/api/v1/merchant/sdk-payment/initiate-transaction')
-      : (process.env.BASGATE_TEST_INITIATE_URL || 'https://api-tst.basgate.com/api/v1/merchant/sdk-payment/initiate-transaction');
+    if (!appId || !clientId || !clientSecret || !mKey || !SUPABASE_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: 'إعدادات بوابة الدفع في الخادم غير مكتملة'
+      });
+    }
 
     // 1. طلب OAuth Access Token من BasGate
     const formData = new URLSearchParams();
@@ -119,11 +134,10 @@ export default async function handler(req, res) {
     });
 
     if (!tokenRes.ok) {
-      const errText = await tokenRes.text();
+      console.error('BasGate auth error status:', tokenRes.status);
       return res.status(502).json({
         success: false,
-        error: `تعذر الاتصال ببوابة BasGate للمصادقة: ${tokenRes.status}`,
-        details: errText
+        error: 'تعذر الاتصال ببوابة الدفع للمصادقة في الوقت الحالي'
       });
     }
 
@@ -131,10 +145,10 @@ export default async function handler(req, res) {
     const accessToken = tokenData.access_token || tokenData.token;
 
     if (!accessToken) {
+      console.error('BasGate missing access token');
       return res.status(502).json({
         success: false,
-        error: 'لم يتم استلام توكن المصادقة من بوابة BasGate',
-        details: tokenData
+        error: 'لم يتم استلام رمز المصادقة من بوابة الدفع'
       });
     }
 
@@ -167,9 +181,7 @@ export default async function handler(req, res) {
     };
 
     const bodyJson = JSON.stringify(requestBodyData);
-    const signature = isLive
-      ? generateBasGateSignature(bodyJson, mKey)
-      : 'QDY0UVc1NzYzckFXYW9zMg==';
+    const signature = generateBasGateSignature(bodyJson, mKey);
 
     // 3. طلب initiate-transaction من BasGate
     const initRes = await fetch(initiateUrl, {
@@ -194,11 +206,10 @@ export default async function handler(req, res) {
     const trxToken = initData.body?.trxToken || initData.trxToken || initData.data?.trxToken || initData.trx_token;
 
     if (!initRes.ok || !trxToken) {
-      console.error('BasGate initiate error:', initData);
+      console.error('BasGate initiate error code:', initData?.code, initData?.messages);
       return res.status(400).json({
         success: false,
-        error: initData.messages?.[0] || 'تعذر بدء المعاملة لدى بوابة BasGate',
-        details: initData
+        error: initData.messages?.[0] || 'تعذر بدء المعاملة لدى بوابة الدفع'
       });
     }
 
@@ -219,9 +230,9 @@ export default async function handler(req, res) {
         customer_name: customer_name || '',
         order_details: requestBodyData.orderDetails
       }
-    });
+    }, SUPABASE_KEY);
 
-    // 5. حفظ لوج العملية
+    // 5. حفظ لوج العملية (مع تنقية السجلات وإخفاء trxToken)
     await insertSupabase('payment_logs', {
       payment_id: paymentId,
       action: 'initiate',
@@ -229,10 +240,9 @@ export default async function handler(req, res) {
         order_id: effectiveOrderId,
         amount: Number(amount),
         currency,
-        trx_token: trxToken,
         mode
       }
-    });
+    }, SUPABASE_KEY);
 
     return res.status(200).json({
       success: true,
@@ -245,11 +255,10 @@ export default async function handler(req, res) {
       mode: mode
     });
   } catch (error) {
-    console.error('Handler error:', error);
+    console.error('Initiate handler error:', error.message);
     return res.status(500).json({
       success: false,
-      error: 'خطأ غير متوقع أثناء معالجة طلب الدفع',
-      details: error.message
+      error: 'حدث خطأ أثناء الاتصال ببوابة الدفع، يرجى المحاولة لاحقاً'
     });
   }
 }

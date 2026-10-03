@@ -114,6 +114,9 @@ class AuthRepository implements IAuthRepository {
     if (data['error'] == 'USER_NOT_FOUND') {
       throw Exception('رقم الحساب غير مسجل في النظام. يرجى إنشاء حساب جديد أولاً.');
     }
+    if (data['error'] == 'ACCOUNT_LOCKED') {
+      throw Exception('تم قفل الحساب مؤقتاً لمدة 15 دقيقة بسبب تجاوز عدد المحاولات الخاطئة المسموحة.');
+    }
     if (data['error'] == 'INVALID_PASSWORD') {
       throw Exception('كلمة المرور غير صحيحة، يرجى التأكد وإعادة المحاولة.');
     }
@@ -138,6 +141,9 @@ class AuthRepository implements IAuthRepository {
 
     if (data['error'] == 'USER_NOT_FOUND') {
       throw Exception('رقم الحساب غير مسجل في النظام. يرجى إنشاء حساب جديد أولاً.');
+    }
+    if (data['error'] == 'ACCOUNT_LOCKED') {
+      throw Exception('تم قفل الحساب مؤقتاً لمدة 15 دقيقة بسبب تجاوز عدد المحاولات الخاطئة المسموحة.');
     }
     if (data['error'] == 'INVALID_PASSWORD') {
       throw Exception('انتهت صلاحية بيانات البصمة المحفوظة، يرجى الدخول بكلمة المرور.');
@@ -180,6 +186,9 @@ class AuthRepository implements IAuthRepository {
 
     if (data['error'] == 'USER_NOT_FOUND') {
       throw Exception('لم يتم العثور على الحساب في النظام.');
+    }
+    if (data['error'] == 'ACCOUNT_LOCKED') {
+      throw Exception('تم قفل الحساب مؤقتاً لمدة 15 دقيقة بسبب تجاوز عدد المحاولات الخاطئة المسموحة.');
     }
     if (data['error'] == 'INVALID_OLD_PASSWORD') {
       throw Exception('كلمة المرور القديمة غير صحيحة، يرجى التأكد وإعادة المحاولة.');

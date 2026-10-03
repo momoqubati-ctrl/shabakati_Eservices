@@ -131,7 +131,7 @@ class BasGatePaymentService {
             );
 
       // 3. فتح شاشة الدفع الخاصة بـ BasGate Native SDK
-      debugPrint('[BasGate] Calling SDK with trxToken=$trxToken, environment=$env');
+      debugPrint('[BasGate] Calling SDK in environment=$env');
       final result = await BasPayFlutter().callBasPay(model: sdkModel);
       final bool resultStatus = result.resultStatus;
       final resultModel = result.resultModel;

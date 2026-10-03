@@ -138,7 +138,7 @@ class OrderRepository implements IOrderRepository {
           }
         } else if (fulfillmentStatus == 'ready' && sellerOrderId != null) {
           // 2. إذا كان التسليم فوري ومكتمل (ready)، نقوم باستهلاك المفتاح الرقمي فوراً
-          final assets = await _consumeDelivery(sellerOrderId);
+          final assets = await _consumeDelivery(sellerOrderId, externalOrderId: externalOrderId);
           deliveredKey = assets['key'];
           deliveredUrl = assets['url'];
           if (deliveredKey != null && deliveredKey.isNotEmpty) {
@@ -217,11 +217,14 @@ class OrderRepository implements IOrderRepository {
     );
   }
 
-  Future<Map<String, dynamic>> _consumeDelivery(int sellerOrderId) async {
+  Future<Map<String, dynamic>> _consumeDelivery(int sellerOrderId, {String? externalOrderId}) async {
     try {
       // 1. المحاولة الأساسية عبر بوابة الخادم المؤمنة
+      final extParam = (externalOrderId != null && externalOrderId.isNotEmpty)
+          ? '&external_order_id=${Uri.encodeComponent(externalOrderId)}'
+          : '';
       final gwRes = await _gatewayDio.get(
-        '${ApiConfig.vercelBackendUrl}/api/orders?seller_order_id=$sellerOrderId&action=consume_key',
+        '${ApiConfig.vercelBackendUrl}/api/orders?seller_order_id=$sellerOrderId$extParam&action=consume_key',
       );
       if (gwRes.statusCode == 200 && gwRes.data is Map) {
         final assets = gwRes.data['data']?['assets'] as List?;
@@ -405,22 +408,13 @@ class OrderRepository implements IOrderRepository {
   Future<List<OrderModel>> getOrdersForUser(UserAccountModel user) async {
     if (supabaseClient == null) return [];
     try {
-      final filters = <String>[
-        'account_number.eq.${user.accountNumber}',
-        'account_number.eq.${user.phoneNational}',
-        'contact_phone.eq.${user.accountNumber}',
-        'contact_phone.eq.${user.phoneNational}',
-      ];
-      if (user.id != null) {
-        filters.add('user_id.eq.${user.id}');
-      }
-      final res = await supabaseClient!
-          .from('orders')
-          .select()
-          .or(filters.join(','))
-          .order('created_at', ascending: false);
+      final res = await supabaseClient!.rpc('rpc_get_user_orders', params: {
+        'p_account_number': user.accountNumber,
+        'p_phone_national': user.phoneNational,
+        'p_user_id': user.id,
+      });
 
-      final list = (res as List).map((json) => OrderModel.fromJson(json)).toList();
+      final list = (res as List).map((json) => OrderModel.fromJson(Map<String, dynamic>.from(json as Map))).toList();
       final userOrders = list.where((o) => o.matchesUser(user)).toList();
       return await _mergeDeliveredAssets(userOrders);
     } catch (e) {
@@ -430,18 +424,10 @@ class OrderRepository implements IOrderRepository {
   }
 
   @override
-  Stream<List<OrderModel>> streamOrdersForUser(UserAccountModel user) {
-    if (supabaseClient == null) {
-      return const Stream.empty();
-    }
-    return supabaseClient!
-        .from('orders')
-        .stream(primaryKey: ['id'])
-        .order('created_at', ascending: false)
-        .map((dataList) {
-          final list = dataList.map((json) => OrderModel.fromJson(json)).toList();
-          return list.where((o) => o.matchesUser(user)).toList();
-        });
+  Stream<List<OrderModel>> streamOrdersForUser(UserAccountModel user) async* {
+    if (supabaseClient == null) return;
+    yield await getOrdersForUser(user);
+    yield* Stream.periodic(const Duration(seconds: 10)).asyncMap((_) => getOrdersForUser(user));
   }
 
   @override
@@ -515,7 +501,7 @@ class OrderRepository implements IOrderRepository {
 
     // 3. المحاولة الأساسية: عبر بوابة Vercel السحابية (أسرع وأكثر موثوقية وتجاوز حجب الشبكات المحلية)
     try {
-      final gatewayUrl = '${ApiConfig.vercelBackendUrl}/api/orders?seller_order_id=${order.sellerOrderId}&action=consume_key';
+      final gatewayUrl = '${ApiConfig.vercelBackendUrl}/api/orders?seller_order_id=${order.sellerOrderId}&external_order_id=${Uri.encodeComponent(order.externalOrderId)}&action=consume_key';
       final res = await _gatewayDio.get(gatewayUrl);
       if (res.statusCode == 200 && res.data is Map) {
         final data = res.data['data'];
@@ -561,7 +547,7 @@ class OrderRepository implements IOrderRepository {
           status = data['status'] ?? status;
 
           if (fulfillmentStatus == 'ready') {
-            final assets = await _consumeDelivery(order.sellerOrderId!);
+            final assets = await _consumeDelivery(order.sellerOrderId!, externalOrderId: order.externalOrderId);
             if (assets['key'] != null) {
               key = assets['key'] as String?;
               url = assets['url'] as String?;

@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -14,12 +13,6 @@ class OtpService {
   })  : _supabase = supabase ?? Supabase.instance.client,
         _dio = dio ?? Dio();
 
-  /// توليد رمز عشوائي مكون من 4 أرقام
-  String generate4DigitOtp() {
-    final random = Random.secure();
-    return (1000 + random.nextInt(9000)).toString();
-  }
-
   /// تنظيف رقم الهاتف وإزالة أي مسافات أو إشارات زائد ومعالجة الأصفار الزائدة
   String sanitizePhoneNumber(String phoneWithCode) {
     var cleaned = phoneWithCode.replaceAll(RegExp(r'[^0-9]'), '');
@@ -33,50 +26,31 @@ class OtpService {
     return cleaned;
   }
 
-  /// إرسال رمز OTP إلى الهاتف عبر واتساب أو SMS
+  /// طلب توليد وإرسال رمز OTP من الخادم الآمن (/api/send-otp) دون توليد محلي
   Future<bool> sendOtp({
     required String phoneWithCode,
     String channel = 'whatsapp',
   }) async {
     try {
-      final otp = generate4DigitOtp();
       final cleanPhone = sanitizePhoneNumber(phoneWithCode);
-      final expiresAt = DateTime.now().toUtc().add(const Duration(minutes: 5));
 
-      // 1. تسجيل الرمز في قاعدة بيانات Supabase
-      await _supabase.from('phone_otps').insert({
-        'phone': phoneWithCode,
-        'otp_code': otp,
-        'channel': channel,
-        'is_used': false,
-        'expires_at': expiresAt.toIso8601String(),
-      });
+      final res = await _dio.post(
+        '${ApiConfig.vercelBackendUrl}/api/send-otp',
+        data: {
+          'phone': cleanPhone,
+          'raw_phone': phoneWithCode.trim(),
+          'channel': channel,
+        },
+        options: Options(
+          headers: {'Content-Type': 'application/json'},
+          sendTimeout: const Duration(seconds: 30),
+          receiveTimeout: const Duration(seconds: 30),
+        ),
+      );
 
-      // 2. إرسال الرسالة عبر بوابة الخادم المشفرة والآمنة (Serverless Backend /api/send-otp)
-      if (channel == 'whatsapp') {
-        try {
-          final res = await _dio.post(
-            '${ApiConfig.vercelBackendUrl}/api/send-otp',
-            data: {
-              'phone': cleanPhone, // رقم بدون + وخالي من أي صفر زائد
-              'otp': otp,
-              'channel': channel,
-            },
-            options: Options(
-              headers: {'Content-Type': 'application/json'},
-              sendTimeout: const Duration(seconds: 30),
-              receiveTimeout: const Duration(seconds: 30),
-            ),
-          );
-          debugPrint('Backend OTP response: ${res.statusCode} ${res.data}');
-        } catch (e) {
-          debugPrint('Backend OTP dispatch notice: $e');
-        }
-      }
-
-      return true;
+      return res.statusCode == 200;
     } catch (e) {
-      debugPrint('Error in sendOtp: $e');
+      debugPrint('[OtpService] Failed to dispatch OTP request');
       return false;
     }
   }
@@ -95,7 +69,7 @@ class OtpService {
       });
       return res == true;
     } catch (e) {
-      debugPrint('Error verifying OTP: $e');
+      debugPrint('[OtpService] OTP verification failed');
       return false;
     }
   }

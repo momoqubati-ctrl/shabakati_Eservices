@@ -1,66 +1,41 @@
-import CryptoJS from 'crypto-js';
-import { API_CONFIG } from '../config/apiConfig';
+import { supabase } from '../config/supabase';
 
 export class DigitalVaultService {
-  static generateHeaders(method, pathWithQuery, bodyData = null) {
-    const nowUtc = new Date().toISOString().split('.')[0] + 'Z';
-    const nonce = Math.random().toString(36).substring(2) + Date.now().toString(36);
-    
-    let rawBody = '';
-    if (bodyData) {
-      rawBody = typeof bodyData === 'string' ? bodyData : JSON.stringify(bodyData);
-    }
-    
-    const bodyHash = CryptoJS.SHA256(rawBody).toString(CryptoJS.enc.Hex).toLowerCase();
-    
-    const canonicalRequest = [
-      method.toUpperCase(),
-      pathWithQuery,
-      nowUtc,
-      nonce,
-      bodyHash
-    ].join('\n');
-    
-    const signature = CryptoJS.HmacSHA256(canonicalRequest, API_CONFIG.apiSecret)
-      .toString(CryptoJS.enc.Hex)
-      .toLowerCase();
-
-    return {
+  static async getAuthHeaders() {
+    const headers = {
       'Accept': 'application/json',
-      'Content-Type': 'application/json',
-      'X-Seller-Key': API_CONFIG.keyId,
-      'X-Seller-Timestamp': nowUtc,
-      'X-Seller-Nonce': nonce,
-      'X-Seller-Signature': `sha256=${signature}`,
-      'X-Request-ID': `admin_${Date.now()}`
+      'Content-Type': 'application/json'
     };
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+    } catch (_) {}
+    return headers;
   }
 
   static async getSellerProfile() {
-    const path = '/api/seller/v1/me';
-    const headers = this.generateHeaders('GET', path);
-    const resp = await fetch(`${API_CONFIG.baseUrl}/me`, { headers });
+    const headers = await this.getAuthHeaders();
+    const resp = await fetch('/api/catalog?action=seller_profile', { headers });
     return await resp.json();
   }
 
   static async getSellerWallet() {
-    const path = '/api/seller/v1/wallet';
-    const headers = this.generateHeaders('GET', path);
-    const resp = await fetch(`${API_CONFIG.baseUrl}/wallet`, { headers });
+    const headers = await this.getAuthHeaders();
+    const resp = await fetch('/api/catalog?action=seller_wallet', { headers });
     return await resp.json();
   }
 
   static async getCatalogProducts() {
-    const path = '/api/seller/v1/catalog/products?limit=50';
-    const headers = this.generateHeaders('GET', path);
-    const resp = await fetch(`${API_CONFIG.baseUrl}/catalog/products?limit=50`, { headers });
+    const headers = await this.getAuthHeaders();
+    const resp = await fetch('/api/catalog?limit=50', { headers });
     return await resp.json();
   }
 
   static async getSellerOrder(sellerOrderId) {
-    const path = `/api/seller/v1/orders/${sellerOrderId}`;
-    const headers = this.generateHeaders('GET', path);
-    const resp = await fetch(`${API_CONFIG.baseUrl}/orders/${sellerOrderId}`, { headers });
+    const headers = await this.getAuthHeaders();
+    const resp = await fetch(`/api/orders?seller_order_id=${encodeURIComponent(sellerOrderId)}`, { headers });
     const text = await resp.text();
     let data = null;
     try {
@@ -72,9 +47,8 @@ export class DigitalVaultService {
   }
 
   static async getOrders(limit = 20) {
-    const path = `/api/seller/v1/orders?limit=${limit}`;
-    const headers = this.generateHeaders('GET', path);
-    const resp = await fetch(`${API_CONFIG.baseUrl}/orders?limit=${limit}`, { headers });
+    const headers = await this.getAuthHeaders();
+    const resp = await fetch(`/api/orders?action=list&limit=${encodeURIComponent(limit)}`, { headers });
     const text = await resp.text();
     let data = null;
     try {
@@ -86,17 +60,15 @@ export class DigitalVaultService {
   }
 
   static async createOrder({ externalOrderId, items }) {
-    const path = '/api/seller/v1/orders';
+    const headers = await this.getAuthHeaders();
     const body = {
       external_order_id: externalOrderId,
-      items: items.map(i => ({
+      items: (items || []).map(i => ({
         product_id: Number(i.product_id),
         quantity: Number(i.quantity || 1)
       }))
     };
-    const headers = this.generateHeaders('POST', path, body);
-    headers['Idempotency-Key'] = externalOrderId;
-    const resp = await fetch(`${API_CONFIG.baseUrl}/orders`, {
+    const resp = await fetch('/api/orders', {
       method: 'POST',
       headers,
       body: JSON.stringify(body)
@@ -122,13 +94,10 @@ export class DigitalVaultService {
   }
 
   static async requestDeliveryAccess(sellerOrderId) {
-    const path = `/api/seller/v1/orders/${sellerOrderId}/delivery-access`;
-    const headers = this.generateHeaders('POST', path, {});
-    headers['Idempotency-Key'] = this.generateUUID();
-    const resp = await fetch(`${API_CONFIG.baseUrl}/orders/${sellerOrderId}/delivery-access`, {
-      method: 'POST',
-      headers,
-      body: '{}'
+    const headers = await this.getAuthHeaders();
+    const resp = await fetch(`/api/orders?action=consume_key&seller_order_id=${encodeURIComponent(sellerOrderId)}`, {
+      method: 'GET',
+      headers
     });
     const text = await resp.text();
     let data = null;
@@ -140,34 +109,23 @@ export class DigitalVaultService {
     return { ...data, httpStatus: resp.status, ok: resp.ok, rawText: text };
   }
 
-  static async consumeDeliveryAccess(accessToken) {
-    const path = '/api/seller/v1/delivery-access/consume';
-    const body = { access_token: accessToken };
-    const headers = this.generateHeaders('POST', path, body);
-    const resp = await fetch(`${API_CONFIG.baseUrl}/delivery-access/consume`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body)
-    });
-    const text = await resp.text();
-    let data = null;
-    try {
-      data = JSON.parse(text);
-    } catch (_) {
-      data = { success: false, error: text };
+  static async consumeDeliveryAccess(accessTokenOrAssets) {
+    if (accessTokenOrAssets && typeof accessTokenOrAssets === 'object' && accessTokenOrAssets.assets) {
+      return { success: true, ok: true, httpStatus: 200, data: accessTokenOrAssets };
     }
-    return { ...data, httpStatus: resp.status, ok: resp.ok, rawText: text };
+    return { success: false, ok: false, httpStatus: 400, error: 'Use requestDeliveryAccess via backend' };
   }
 
   static async requestCancellation(sellerOrderId, reason) {
-    const path = `/api/seller/v1/orders/${sellerOrderId}/cancellation-requests`;
-    const body = { reason: (reason || 'إلغاء الطلب بناء على رغبة العميل').substring(0, 500) };
-    const headers = this.generateHeaders('POST', path, body);
-    headers['Idempotency-Key'] = this.generateUUID();
-    const resp = await fetch(`${API_CONFIG.baseUrl}/orders/${sellerOrderId}/cancellation-requests`, {
+    const headers = await this.getAuthHeaders();
+    const resp = await fetch('/api/orders', {
       method: 'POST',
       headers,
-      body: JSON.stringify(body)
+      body: JSON.stringify({
+        action: 'cancel',
+        seller_order_id: sellerOrderId,
+        reason: (reason || 'إلغاء الطلب بناء على رغبة العميل').substring(0, 500)
+      })
     });
     const text = await resp.text();
     let data = null;

@@ -1,6 +1,34 @@
+import crypto from 'crypto';
+
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://enutfwspwrzpvhmtgftl.supabase.co';
+const SUPABASE_ANON = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVudXRmd3Nwd3J6cHZobXRnZnRsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxODE3ODQsImV4cCI6MjEwNTc1Nzc4NH0.dRgwtfHV1OYWxeFKDon030mwesEIx_993cOQiAABTRs';
+
+async function getServerSecrets() {
+  if (globalThis.__shabaktiSecretsCache) return globalThis.__shabaktiSecretsCache;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/rpc_get_backend_secrets`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_ANON,
+        'Authorization': `Bearer ${SUPABASE_ANON}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ p_handshake: process.env.SERVER_HANDSHAKE_KEY || 'shabakti_srv_vault_handshake_2026_v1' })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && typeof data === 'object') {
+        globalThis.__shabaktiSecretsCache = data;
+        return data;
+      }
+    }
+  } catch (_) {}
+  return {};
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') {
@@ -12,15 +40,10 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { phone, otp, channel = 'whatsapp' } = req.body || {};
+    const { phone, raw_phone, channel = 'whatsapp' } = req.body || {};
 
     if (!phone) {
-      return res.status(400).json({ success: false, error: 'Phone number is required' });
-    }
-
-    const cleanOtp = String(otp || '').trim();
-    if (!/^\d{4,6}$/.test(cleanOtp)) {
-      return res.status(400).json({ success: false, error: 'رمز التحقق غير صالح' });
+      return res.status(400).json({ success: false, error: 'رقم الهاتف مطلوب' });
     }
 
     // إزالة أي إشارة + أو مسافات أو رموز غير رقمية بشكل قاطع
@@ -39,17 +62,52 @@ export default async function handler(req, res) {
       return res.status(400).json({ success: false, error: 'رقم الهاتف غير صالح' });
     }
 
-    const token = process.env.WHATSAPP_TOKEN || 
-                  process.env.VITE_WHATSAPP_TOKEN || 
-                  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiI5OGQ0MjI1ZTNhNzc4NjE4ZDdkZDcyNGFlOTI4M2ZiNiIsInJvbGUiOiJ1c2VyIiwiaWF0IjoxNzkwNTM5NTMzfQ.LBj3W0Kq2gIaaMIPwj8V-_sueQhesA812qj4Eyksv_s';
+    const secrets = await getServerSecrets();
+    const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON;
 
-    const from = process.env.WHATSAPP_FROM || 
-                 process.env.VITE_WHATSAPP_FROM || 
-                 '967737241475';
+    // 1. توليد رمز OTP عشوائي آمن من 4 أرقام داخل الخادم حصرياً
+    const generatedOtp = String(crypto.randomInt(1000, 10000));
+    const phoneKey = String(raw_phone || ('+' + cleanPhone)).trim();
 
-    // تقييد نص الرسالة بقالب التحقق الرسمي فقط لمنع إساءة الاستخدام كمرسل رسائل عشوائية (Anti-Spam)
-    const text = `مرحباً بك في بوابة شبكتي للخدمات الرقمية.\n\nرمز التحقق لتسجيل حسابك هو:\n${cleanOtp}\n\nصالح لمدة 5 دقائق. لا تشارك هذا الرمز مع أي شخص.`;
+    // 2. حفظ الرمز في قاعدة بيانات Supabase عبر الدالة المؤمنة مع فحص Rate Limiting
+    const otpSaveRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/rpc_create_phone_otp`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        p_phone: phoneKey,
+        p_clean_phone: cleanPhone,
+        p_otp: generatedOtp,
+        p_channel: channel
+      })
+    });
 
+    const otpSaveData = otpSaveRes.ok ? await otpSaveRes.json() : null;
+    if (otpSaveData && otpSaveData.error === 'RATE_LIMITED') {
+      return res.status(429).json({
+        success: false,
+        error: 'تم تجاوز الحد المسموح لطلبات رمز التحقق، يرجى الانتظار دقائق قبل المحاولة مجدداً'
+      });
+    }
+    if (!otpSaveRes.ok || (otpSaveData && otpSaveData.success === false)) {
+      return res.status(500).json({
+        success: false,
+        error: 'تعذر إنشاء رمز التحقق في الخادم'
+      });
+    }
+
+    // 3. إرسال رمز التحقق عبر بوابة الواتساب دون إرجاعه في استجابة الشبكة للعميل
+    const token = process.env.WHATSAPP_TOKEN || process.env.VITE_WHATSAPP_TOKEN || secrets.WHATSAPP_TOKEN;
+    const from = process.env.WHATSAPP_FROM || process.env.VITE_WHATSAPP_FROM || secrets.WHATSAPP_FROM || '967737241475';
+
+    if (!token) {
+      return res.status(500).json({ success: false, error: 'إعدادات بوابة الرسائل غير مكتملة' });
+    }
+
+    const text = `مرحباً بك في بوابة شبكتي للخدمات الرقمية.\n\nرمز التحقق الخاص بحسابك هو:\n${generatedOtp}\n\nصالح لمدة 5 دقائق. لا تشارك هذا الرمز مع أي شخص.`;
     const endpoint = 'https://whatsqubatibot-9x83.onrender.com/api/qr/rest/send_message';
 
     const controller = new AbortController();
@@ -73,12 +131,22 @@ export default async function handler(req, res) {
 
     clearTimeout(timeout);
 
-    const data = await response.json();
-    return res.status(response.status).json(data);
+    if (!response.ok) {
+      return res.status(502).json({
+        success: false,
+        error: 'تعذر إرسال رسالة الواتساب في الوقت الحالي'
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'تم إرسال رمز التحقق عبر واتساب بنجاح'
+    });
   } catch (error) {
+    console.error('Send OTP error:', error.message);
     return res.status(500).json({
       success: false,
-      error: 'فشل في إرسال رسالة الواتساب عبر الخادم: ' + error.message
+      error: 'حدث خطأ أثناء إرسال رمز التحقق عبر الخادم'
     });
   }
 }
