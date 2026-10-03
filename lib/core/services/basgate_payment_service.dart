@@ -101,7 +101,7 @@ class BasGatePaymentService {
 
       trxToken = initData['trx_token']?.toString();
       createdPaymentId = initData['payment_id']?.toString();
-      final env = initData['environment']?.toString() ?? 'dev';
+      final env = initData['environment']?.toString() ?? 'prod';
       final isProd = env == 'prod' || env == 'live';
 
       if (trxToken == null || trxToken.isEmpty) {
@@ -113,19 +113,18 @@ class BasGatePaymentService {
         );
       }
 
-      // 2. إعداد نموذج الـ SDK بناءً على بيئة التشغيل
-      final userPhone = userAccount ?? customerPhone;
+      // 2. إعداد نموذج الـ SDK بناءً على بيئة التشغيل (دون تعبئة رقم الهاتف مسبقاً في بوابة الدفع)
       final InitBasSdkModel sdkModel = isProd
           ? InitBasSdkModel.prod(
               trxToken: trxToken,
-              userIdentifier: userPhone,
+              userIdentifier: null,
               fullName: customerName ?? 'عميل شبكتي',
               language: 'ar',
               product: null,
             )
           : InitBasSdkModel.dev(
               trxToken: trxToken,
-              userIdentifier: userPhone,
+              userIdentifier: null,
               fullName: customerName ?? 'عميل شبكتي',
               language: 'ar',
               product: null,

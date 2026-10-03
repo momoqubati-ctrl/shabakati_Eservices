@@ -833,24 +833,7 @@ class _AccountProfilePageState extends State<AccountProfilePage> {
                 ),
                 const SizedBox(height: 32),
 
-                // زر تسجيل الخروج النهائي ومسح كافة بيانات التطبيق
-                FilledButton.icon(
-                  icon: const Icon(Icons.power_settings_new_rounded, color: Colors.white, size: 20),
-                  label: const Text(
-                    'تسجيل الخروج النهائي ومسح بيانات التطبيق',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                  ),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.red.shade700,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                  onPressed: () => _confirmFinalLogout(context),
-                ),
-                const SizedBox(height: 12),
-
-                // زر تسجيل خروج عادي
+                // زر تسجيل خروج عادي (في الأعلى)
                 OutlinedButton.icon(
                   icon: Icon(Icons.logout_rounded, color: Colors.grey.shade700, size: 18),
                   label: Text(
@@ -870,6 +853,23 @@ class _AccountProfilePageState extends State<AccountProfilePage> {
                     }
                     setState(() {});
                   },
+                ),
+                const SizedBox(height: 12),
+
+                // زر تسجيل الخروج النهائي ومسح كافة بيانات التطبيق (في الأسفل)
+                FilledButton.icon(
+                  icon: const Icon(Icons.power_settings_new_rounded, color: Colors.white, size: 20),
+                  label: const Text(
+                    'تسجيل الخروج النهائي ومسح بيانات التطبيق',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.red.shade700,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: () => _confirmFinalLogout(context),
                 ),
               ],
             );

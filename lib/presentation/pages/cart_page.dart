@@ -25,7 +25,7 @@ class CartPage extends StatelessWidget {
 
   String _friendlyProviderError(String? rawError) {
     if (rawError == null || rawError.isEmpty) {
-      return 'تعذر إتمام التفعيل التلقائي لدى مزود الخدمة (Digital Vault) في الوقت الحالي.';
+      return 'تعذر إتمام التفعيل التلقائي في الوقت الحالي.';
     }
     final lower = rawError.toLowerCase();
     if (lower.contains('insufficient') || lower.contains('balance') || lower.contains('funds')) {
@@ -132,6 +132,7 @@ class CartPage extends StatelessWidget {
       context: context,
       barrierDismissible: false,
       builder: (dialogCtx) => CheckoutWarningDialog(
+        items: cartState.items,
         totalAmount: cartState.totalRetailUsd(),
         currency: 'USD',
         displayYer: cartState.displayTotalYer(),
@@ -221,7 +222,7 @@ class CartPage extends StatelessWidget {
                         ),
                         const SizedBox(height: 10),
                         Text(
-                          'تم تأكيد عملية السداد بنجاح، جاري الآن شراء وتفعيل طلبك لدى مزود الخدمة (Digital Vault)...',
+                          'تم تأكيد عملية السداد بنجاح، جاري الآن معالجة وتنفيذ طلبك...',
                           textAlign: TextAlign.center,
                           style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600, height: 1.5),
                         ),
@@ -280,7 +281,7 @@ class CartPage extends StatelessWidget {
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          isInstantFulfilled ? 'تم تنفيذ الطلب بنجاح' : (isVaultSuccess ? 'تم تأكيد الشراء لدى المزود' : 'تم استلام الدفع'),
+                          isInstantFulfilled ? 'تم تنفيذ الطلب بنجاح' : (isVaultSuccess ? 'تم تأكيد الشراء بنجاح' : 'تم استلام الدفع'),
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                         ),
                       ),
@@ -291,7 +292,7 @@ class CartPage extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // شارة حالة الشراء والتنفيذ لدى مزود الخدمة Digital Vault
+                        // شارة حالة الشراء والتنفيذ
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.all(12),
@@ -315,8 +316,8 @@ class CartPage extends StatelessWidget {
                                 child: Text(
                                   isVaultSuccess
                                       ? (isInstantFulfilled
-                                          ? 'تم تنفيذ الطلب بنجاح لدى مزود الخدمة Digital Vault'
-                                          : 'تم الشراء بنجاح لدى المزود Digital Vault وجارٍ التجهيز والتسليم')
+                                          ? 'تم تنفيذ الطلب بنجاح وتسليم بيانات الاشتراك'
+                                          : 'تم تأكيد الطلب بنجاح وجارٍ التجهيز والتسليم')
                                       : 'تم خصم المبلغ بنجاح وجارٍ تنفيذ العملية',
                                   style: TextStyle(
                                     color: isVaultSuccess ? Colors.green.shade900 : Colors.amber.shade900,
@@ -467,7 +468,7 @@ class CartPage extends StatelessWidget {
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    const Text('رقم طلب المزود:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                    const Text('رقم العملية:', style: TextStyle(fontSize: 12, color: Colors.grey)),
                                     Text(
                                       '#${order.sellerOrderId}',
                                       style: TextStyle(fontSize: 11, color: Colors.grey.shade700, fontFamily: 'monospace'),
@@ -535,8 +536,9 @@ class CartPage extends StatelessWidget {
               ),
             );
           } else {
-            // ⚠️ 2. ديالوج التنبيه والتعثر لدى المزود: تم الدفع والطلب معلق قيد معالجة الدعم الفني
+            // ⚠️ 2. ديالوج المتابعة مع الدعم الفني: إشعار المستخدم بأنه سيتم تأكيد العملية بشكل يدوي من قبل فريق الدعم الفني
             final friendlyReason = _friendlyProviderError(submitResult.errorMessage);
+            debugPrint('[CartPage] Order pending manual confirmation: $friendlyReason');
 
             showDialog(
               context: context,
@@ -554,7 +556,7 @@ class CartPage extends StatelessWidget {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Icon(
-                          Icons.pending_actions_rounded,
+                          Icons.support_agent_rounded,
                           color: Color(0xFFB45309),
                           size: 26,
                         ),
@@ -583,21 +585,21 @@ class CartPage extends StatelessWidget {
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
+                            children: const [
                               Row(
-                                children: const [
+                                children: [
                                   Icon(Icons.info_outline_rounded, color: Color(0xFFB45309), size: 18),
                                   SizedBox(width: 6),
                                   Text(
-                                    'تم استلام الدفع والطلب معلق',
+                                    'تم استلام الدفع بنجاح',
                                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF92400E)),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 6),
+                              SizedBox(height: 6),
                               Text(
-                                'تم خصم المبلغ بنجاح عبر المحفظة، ولكن تعذر التفعيل الفوري لدى مزود الخدمة (Digital Vault) بسبب:\n• $friendlyReason\n\nطلبك محفوظ ومعلق حالياً في قائمة طلباتك، وسيقوم فريق الدعم الفني بمعالجته وتفعيله لك يدوياً في أقرب وقت.',
-                                style: const TextStyle(fontSize: 12, height: 1.45, color: Color(0xFF78350F)),
+                                'سيتم تأكيد العملية بشكل يدوي من قبل فريق الدعم الفني، وفي حال تم التأخر بإمكانك التواصل معنا.',
+                                style: TextStyle(fontSize: 12.5, height: 1.5, color: Color(0xFF78350F)),
                               ),
                             ],
                           ),
@@ -661,7 +663,7 @@ class CartPage extends StatelessWidget {
                                 children: const [
                                   Text('حالة الطلب:', style: TextStyle(fontSize: 12, color: Colors.grey)),
                                   Text(
-                                    'معلق (قيد المتابعة مع الدعم الفني)',
+                                    'بانتظار التأكيد اليدوي من الدعم الفني',
                                     style: TextStyle(fontSize: 11.5, color: Color(0xFFB45309), fontWeight: FontWeight.bold),
                                   ),
                                 ],
@@ -675,7 +677,7 @@ class CartPage extends StatelessWidget {
                   actions: [
                     FilledButton.icon(
                       icon: const Icon(Icons.chat_rounded, size: 17),
-                      label: const Text('متابعة مع الدعم الفني عبر واتساب'),
+                      label: const Text('التواصل مع الدعم الفني عبر واتساب'),
                       style: FilledButton.styleFrom(
                         backgroundColor: const Color(0xFF25D366),
                         foregroundColor: Colors.white,
@@ -685,12 +687,11 @@ class CartPage extends StatelessWidget {
                       onPressed: () {
                         final supportMsg = '''
 مرحباً الدعم الفني لشبكتي،
-لقد قمت بسداد طلبي بنجاح، والطلب معلق لدى مزود الخدمة:
+لقد قمت بسداد طلبي بنجاح وبانتظار تأكيد وتنفيذ العملية:
 • رقم الطلب: #${order.externalOrderId.replaceAll('ord_', '')}
 • رقم العملية البنكية: ${paymentResult.paymentId ?? 'غير متوفر'}
 • المبلغ: ${cartState.displayTotalYer()}
-• سبب التنبيه: $friendlyReason
-أرجو معالجة وتفعيل الطلب. شكراً لكم.
+أرجو تأكيد وتنفيذ الطلب. شكراً لكم.
 '''.trim();
                         WhatsAppLauncher.openSupportChat(message: supportMsg);
                       },

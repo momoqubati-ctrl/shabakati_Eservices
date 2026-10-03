@@ -76,8 +76,8 @@ export default async function handler(req, res) {
       return res.status(400).json({ success: false, error: 'المبلغ غير صالح لإتمام عملية الدفع' });
     }
 
-    const mode = (process.env.BASGATE_MODE || 'test').toLowerCase();
-    const isLive = mode === 'live';
+    const mode = 'live';
+    const isLive = true;
 
     const appId = isLive
       ? (process.env.BASGATE_LIVE_APP_ID || process.env.BASGATE_APP_ID || 'dcb2583d-a276-478c-a70b-77463f1fc3e5')
@@ -92,7 +92,7 @@ export default async function handler(req, res) {
       : (process.env.BASGATE_TEST_CLIENT_SECRET || '9ddad294-7c6c-444a-9859-0613ea6c2da4');
 
     const mKey = isLive
-      ? (process.env.BASGATE_LIVE_MKEY || process.env.BASGATE_MKEY || clientSecret)
+      ? (process.env.BASGATE_LIVE_MKEY || process.env.BASGATE_MKEY || '---aUdFMztJdFQ4YMLSfZhEUQ')
       : (process.env.BASGATE_TEST_MKEY || clientSecret);
 
     const authUrl = isLive
@@ -149,7 +149,7 @@ export default async function handler(req, res) {
         currency: currency.toUpperCase()
       },
       customerInfo: {
-        id: user_account || 'CUSTOMER'
+        id: 'CUSTOMER'
       },
       ordertype: 'PayBill',
       orderId: effectiveOrderId,
