@@ -63,82 +63,85 @@ class _PhoneInputFieldState extends State<PhoneInputField> {
           ),
           const SizedBox(height: 6),
         ],
-        Container(
-          decoration: BoxDecoration(
-            color: theme.cardColor,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: colorScheme.outlineVariant.withAlpha(120)),
-          ),
-          child: Row(
-            children: [
-              // قسم بادئة الدولة مع العلم وقائمة البحث
-              InkWell(
-                onTap: widget.enabled ? _showCountryPicker : null,
-                borderRadius: const BorderRadius.horizontal(right: Radius.circular(14)),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 13),
-                  decoration: BoxDecoration(
-                    color: colorScheme.surfaceContainerHighest.withAlpha(80),
-                    borderRadius: const BorderRadius.horizontal(right: Radius.circular(14)),
-                    border: Border(
-                      left: BorderSide(color: colorScheme.outlineVariant.withAlpha(100)),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        _selectedCountry.flag,
-                        style: const TextStyle(fontSize: 18),
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Container(
+            decoration: BoxDecoration(
+              color: theme.cardColor,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: colorScheme.outlineVariant.withAlpha(120)),
+            ),
+            child: Row(
+              textDirection: TextDirection.ltr,
+              children: [
+                // قسم بادئة الدولة مع العلم وقائمة البحث (في اليسار)
+                InkWell(
+                  onTap: widget.enabled ? _showCountryPicker : null,
+                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(14)),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 13),
+                    decoration: BoxDecoration(
+                      color: colorScheme.surfaceContainerHighest.withAlpha(80),
+                      borderRadius: const BorderRadius.horizontal(left: Radius.circular(14)),
+                      border: Border(
+                        right: BorderSide(color: colorScheme.outlineVariant.withAlpha(100)),
                       ),
-                      const SizedBox(width: 6),
-                      Directionality(
-                        textDirection: TextDirection.ltr,
-                        child: Text(
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      textDirection: TextDirection.ltr,
+                      children: [
+                        Text(
+                          _selectedCountry.flag,
+                          style: const TextStyle(fontSize: 18),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
                           _selectedCountry.dialCode,
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 4),
-                      Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        size: 18,
-                        color: Colors.grey.shade600,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // حقل إدخال رقم الهاتف
-              Expanded(
-                child: TextField(
-                  controller: widget.controller,
-                  enabled: widget.enabled,
-                  keyboardType: TextInputType.number,
-                  textAlign: TextAlign.left,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.2,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: widget.hintText,
-                    hintStyle: TextStyle(
-                      color: Colors.grey.shade400,
-                      fontWeight: FontWeight.normal,
-                      letterSpacing: 0,
+                        const SizedBox(width: 4),
+                        Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          size: 18,
+                          color: Colors.grey.shade600,
+                        ),
+                      ],
                     ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-                    border: InputBorder.none,
-                    prefixIcon: const Icon(Icons.phone_iphone_rounded, size: 20),
                   ),
                 ),
-              ),
-            ],
+
+                // حقل إدخال رقم الهاتف (على اليمين بجانب رمز الدولة)
+                Expanded(
+                  child: TextField(
+                    controller: widget.controller,
+                    enabled: widget.enabled,
+                    keyboardType: TextInputType.number,
+                    textDirection: TextDirection.ltr,
+                    textAlign: TextAlign.left,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: widget.hintText,
+                      hintStyle: TextStyle(
+                        color: Colors.grey.shade400,
+                        fontWeight: FontWeight.normal,
+                        letterSpacing: 0,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                      border: InputBorder.none,
+                      suffixIcon: const Icon(Icons.phone_iphone_rounded, size: 20),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ],
