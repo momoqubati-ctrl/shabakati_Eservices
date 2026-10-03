@@ -1,4 +1,6 @@
 import 'package:intl/intl.dart';
+import 'user_account_model.dart';
+
 class OrderModel {
   final int? id;
   final String externalOrderId;
@@ -14,6 +16,8 @@ class OrderModel {
   final String? contactPhone;
   final String? notes;
   final String? paymentId;
+  final int? userId;
+  final String? accountNumber;
 
   OrderModel({
     this.id,
@@ -30,6 +34,8 @@ class OrderModel {
     this.contactPhone,
     this.notes,
     this.paymentId,
+    this.userId,
+    this.accountNumber,
   });
 
   bool get isReady =>
@@ -41,6 +47,24 @@ class OrderModel {
       !isFailed &&
       (fulfillmentStatus == 'processing' || status == 'paid' || status == 'pending');
   bool get isFailed => fulfillmentStatus == 'failed' || status == 'cancelled';
+
+  /// فحص هل الطلب ينتمي لهذا المستخدم بالتحديد لمنع تداخل بيانات المستخدمين
+  bool matchesUser(UserAccountModel user) {
+    if (userId != null && user.id != null && userId == user.id) return true;
+    if (accountNumber != null && accountNumber!.isNotEmpty) {
+      final cleanAcc = accountNumber!.replaceAll('+', '').trim();
+      final cleanUserAcc = user.accountNumber.replaceAll('+', '').trim();
+      final cleanUserNat = user.phoneNational.replaceAll('+', '').trim();
+      if (cleanAcc == cleanUserAcc || cleanAcc == cleanUserNat) return true;
+    }
+    if (contactPhone != null && contactPhone!.isNotEmpty) {
+      final cleanContact = contactPhone!.replaceAll('+', '').trim();
+      final cleanUserAcc = user.accountNumber.replaceAll('+', '').trim();
+      final cleanUserNat = user.phoneNational.replaceAll('+', '').trim();
+      if (cleanContact == cleanUserAcc || cleanContact == cleanUserNat) return true;
+    }
+    return false;
+  }
 
   OrderModel copyWith({
     int? id,
@@ -57,6 +81,8 @@ class OrderModel {
     String? contactPhone,
     String? notes,
     String? paymentId,
+    int? userId,
+    String? accountNumber,
   }) {
     return OrderModel(
       id: id ?? this.id,
@@ -73,6 +99,8 @@ class OrderModel {
       contactPhone: contactPhone ?? this.contactPhone,
       notes: notes ?? this.notes,
       paymentId: paymentId ?? this.paymentId,
+      userId: userId ?? this.userId,
+      accountNumber: accountNumber ?? this.accountNumber,
     );
   }
 
@@ -149,6 +177,8 @@ class OrderModel {
       contactPhone: json['contact_phone']?.toString(),
       notes: json['notes']?.toString() ?? json['failure_reason']?.toString(),
       paymentId: json['payment_id']?.toString(),
+      userId: json['user_id'] is int ? json['user_id'] : int.tryParse(json['user_id']?.toString() ?? ''),
+      accountNumber: json['account_number']?.toString(),
     );
   }
 
@@ -173,6 +203,8 @@ class OrderModel {
           : null,
       'payment_id': paymentId,
       'notes': notes,
+      'user_id': userId,
+      'account_number': accountNumber,
       'created_at': createdAt.toIso8601String(),
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     };

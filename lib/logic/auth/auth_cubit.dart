@@ -314,9 +314,21 @@ class AuthCubit extends Cubit<AuthState> {
     }
   }
 
-  /// تسجيل الخروج
+  /// تسجيل الخروج العادي
   Future<void> logout() async {
     await secureStorageService.clearActiveUser();
+    currentUser = null;
+    emit(AuthInitial());
+  }
+
+  /// تسجيل الخروج النهائي ومسح كافة بيانات التطبيق والتخزين المشفر بالكامل
+  Future<void> finalLogout() async {
+    try {
+      await biometricService.clearAuthData();
+    } catch (_) {}
+    try {
+      await secureStorageService.wipeAllData();
+    } catch (_) {}
     currentUser = null;
     emit(AuthInitial());
   }

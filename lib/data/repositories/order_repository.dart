@@ -7,6 +7,7 @@ import '../../core/network/dio_client.dart';
 import '../../core/services/secure_storage_service.dart';
 import '../models/cart_item_model.dart';
 import '../models/order_model.dart';
+import '../models/user_account_model.dart';
 
 abstract class IOrderRepository {
   Future<OrderSubmitResult> submitOrder({
@@ -16,8 +17,12 @@ abstract class IOrderRepository {
     String? contactPhone,
     String? contactEmail,
     String? paymentId,
+    int? userId,
+    String? accountNumber,
   });
 
+  Future<List<OrderModel>> getOrdersForUser(UserAccountModel user);
+  Stream<List<OrderModel>> streamOrdersForUser(UserAccountModel user);
   Future<List<OrderModel>> getOrdersByDevice(String deviceId);
   Stream<List<OrderModel>> streamOrdersByDevice(String deviceId);
   Future<OrderModel> refreshOrderStatus(OrderModel order);
@@ -51,6 +56,8 @@ class OrderRepository implements IOrderRepository {
     String? contactPhone,
     String? contactEmail,
     String? paymentId,
+    int? userId,
+    String? accountNumber,
   }) async {
     final externalOrderId = 'ord_${_uuid.v4().substring(0, 12)}';
     final payloadItems = items.map((e) => {
@@ -129,6 +136,8 @@ class OrderRepository implements IOrderRepository {
       telegramUser: telegramUser,
       contactPhone: contactPhone,
       paymentId: paymentId,
+      userId: userId,
+      accountNumber: accountNumber,
     );
 
     try {
@@ -139,6 +148,8 @@ class OrderRepository implements IOrderRepository {
         telegramUser: telegramUser,
         contactPhone: contactPhone,
         contactEmail: contactEmail,
+        userId: userId,
+        accountNumber: accountNumber,
       );
     } catch (e) {
       // C4 Fix: تسجيل خطأ حفظ Supabase بدلاً من ابتلاعه صامتاً
@@ -209,6 +220,39 @@ class OrderRepository implements IOrderRepository {
     return {'key': null, 'url': null, 'rawAssets': null};
   }
 
+  Future<List<OrderModel>> _mergeDeliveredAssets(List<OrderModel> list) async {
+    if (secureStorageService == null) return list;
+    final mergedList = <OrderModel>[];
+    for (final o in list) {
+      if (o.deliveredKey == null || o.deliveredKey!.isEmpty) {
+        final cached = await secureStorageService!.getDeliveredAsset(o.externalOrderId);
+        if (cached != null && cached['key'] != null && cached['key']!.isNotEmpty) {
+          mergedList.add(o.copyWith(
+            status: 'completed',
+            fulfillmentStatus: 'ready',
+            deliveredKey: cached['key'],
+            deliveredUrl: cached['url'],
+          ));
+          continue;
+        }
+        if (o.id != null) {
+          final cachedById = await secureStorageService!.getDeliveredAsset(o.id.toString());
+          if (cachedById != null && cachedById['key'] != null && cachedById['key']!.isNotEmpty) {
+            mergedList.add(o.copyWith(
+              status: 'completed',
+              fulfillmentStatus: 'ready',
+              deliveredKey: cachedById['key'],
+              deliveredUrl: cachedById['url'],
+            ));
+            continue;
+          }
+        }
+      }
+      mergedList.add(o);
+    }
+    return mergedList;
+  }
+
   Future<void> _saveOrderToSupabase({
     required OrderModel order,
     required List<CartItemModel> items,
@@ -216,6 +260,8 @@ class OrderRepository implements IOrderRepository {
     String? telegramUser,
     String? contactPhone,
     String? contactEmail,
+    int? userId,
+    String? accountNumber,
   }) async {
     if (supabaseClient == null) return;
     try {
@@ -242,6 +288,8 @@ class OrderRepository implements IOrderRepository {
             'idempotency_key': const Uuid().v4(),
             'delivered_assets': deliveredAssets,
             'payment_id': order.paymentId,
+            'user_id': userId,
+            'account_number': accountNumber,
           })
           .select('id')
           .single();
@@ -267,6 +315,49 @@ class OrderRepository implements IOrderRepository {
   }
 
   @override
+  Future<List<OrderModel>> getOrdersForUser(UserAccountModel user) async {
+    if (supabaseClient == null) return [];
+    try {
+      final filters = <String>[
+        'account_number.eq.${user.accountNumber}',
+        'account_number.eq.${user.phoneNational}',
+        'contact_phone.eq.${user.accountNumber}',
+        'contact_phone.eq.${user.phoneNational}',
+      ];
+      if (user.id != null) {
+        filters.add('user_id.eq.${user.id}');
+      }
+      final res = await supabaseClient!
+          .from('orders')
+          .select()
+          .or(filters.join(','))
+          .order('created_at', ascending: false);
+
+      final list = (res as List).map((json) => OrderModel.fromJson(json)).toList();
+      final userOrders = list.where((o) => o.matchesUser(user)).toList();
+      return await _mergeDeliveredAssets(userOrders);
+    } catch (e) {
+      debugPrint('[OrderRepo] getOrdersForUser error: $e');
+      return [];
+    }
+  }
+
+  @override
+  Stream<List<OrderModel>> streamOrdersForUser(UserAccountModel user) {
+    if (supabaseClient == null) {
+      return const Stream.empty();
+    }
+    return supabaseClient!
+        .from('orders')
+        .stream(primaryKey: ['id'])
+        .order('created_at', ascending: false)
+        .map((dataList) {
+          final list = dataList.map((json) => OrderModel.fromJson(json)).toList();
+          return list.where((o) => o.matchesUser(user)).toList();
+        });
+  }
+
+  @override
   Future<List<OrderModel>> getOrdersByDevice(String deviceId) async {
     if (supabaseClient == null) return [];
     try {
@@ -277,38 +368,7 @@ class OrderRepository implements IOrderRepository {
           .order('created_at', ascending: false);
 
       final list = (res as List).map((json) => OrderModel.fromJson(json)).toList();
-      if (secureStorageService != null) {
-        final mergedList = <OrderModel>[];
-        for (final o in list) {
-          if (o.deliveredKey == null || o.deliveredKey!.isEmpty) {
-            final cached = await secureStorageService!.getDeliveredAsset(o.externalOrderId);
-            if (cached != null && cached['key'] != null && cached['key']!.isNotEmpty) {
-              mergedList.add(o.copyWith(
-                status: 'completed',
-                fulfillmentStatus: 'ready',
-                deliveredKey: cached['key'],
-                deliveredUrl: cached['url'],
-              ));
-              continue;
-            }
-            if (o.id != null) {
-              final cachedById = await secureStorageService!.getDeliveredAsset(o.id.toString());
-              if (cachedById != null && cachedById['key'] != null && cachedById['key']!.isNotEmpty) {
-                mergedList.add(o.copyWith(
-                  status: 'completed',
-                  fulfillmentStatus: 'ready',
-                  deliveredKey: cachedById['key'],
-                  deliveredUrl: cachedById['url'],
-                ));
-                continue;
-              }
-            }
-          }
-          mergedList.add(o);
-        }
-        return mergedList;
-      }
-      return list;
+      return await _mergeDeliveredAssets(list);
     } catch (_) {
       return [];
     }

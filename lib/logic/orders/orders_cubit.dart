@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/services/secure_storage_service.dart';
 import '../../data/models/cart_item_model.dart';
 import '../../data/models/order_model.dart';
+import '../../data/models/user_account_model.dart';
 import '../../data/repositories/order_repository.dart';
 import 'orders_state.dart';
 
@@ -11,6 +12,7 @@ class OrdersCubit extends Cubit<OrdersState> {
   final IOrderRepository orderRepository;
   final SecureStorageService secureStorageService;
   StreamSubscription<List<OrderModel>>? _ordersSubscription;
+  UserAccountModel? _currentUser;
 
   OrdersCubit({
     required this.orderRepository,
@@ -97,43 +99,66 @@ class OrdersCubit extends Cubit<OrdersState> {
     });
   }
 
-  Future<void> loadOrders() async {
+  /// تحميل الطلبات الخاصة بمستخدم معين فقط لضمان العزل التام للبيانات
+  Future<void> loadOrdersForUser(UserAccountModel user) async {
+    _currentUser = user;
     emit(OrdersLoading());
     try {
-      final deviceId = await secureStorageService.getOrCreateDeviceId();
-
-      // إلغاء أي اشتراك Realtime سابق لمنع تكرار الـ listeners
       await _ordersSubscription?.cancel();
 
-      // جلب فوري أولي لتقليل وقت الانتظار ودمج الكاش المحلي
-      final initialList = await orderRepository.getOrdersByDevice(deviceId);
+      final initialList = await orderRepository.getOrdersForUser(user);
       final mergedInitial = await _mergeWithLocalCache(initialList);
       emit(OrdersLoaded(mergedInitial));
 
-      // فحص خفي لأي طلبات معلقة
       _syncPendingOrders(mergedInitial);
 
-      // بدء الاستماع اللحظي (Supabase Realtime Stream)
       _ordersSubscription = orderRepository
-          .streamOrdersByDevice(deviceId)
+          .streamOrdersForUser(user)
           .listen((ordersList) async {
         final mergedList = await _mergeWithLocalCache(ordersList);
         emit(OrdersLoaded(mergedList));
       }, onError: (_) async {
-        final fallbackList = await orderRepository.getOrdersByDevice(deviceId);
+        final fallbackList = await orderRepository.getOrdersForUser(user);
         final mergedFallback = await _mergeWithLocalCache(fallbackList);
         emit(OrdersLoaded(mergedFallback));
       });
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[OrdersCubit] loadOrdersForUser error: $e');
       emit(OrdersLoaded(const []));
     }
   }
 
-  /// تحديث شامل لكافة الطلبات عند الضغط على زر التحديث أو السحب للأسفل
+  /// مسح كافة الطلبات من الذاكرة والشاشات عند تسجيل الخروج النهائي
+  Future<void> clearOrders() async {
+    _currentUser = null;
+    await _ordersSubscription?.cancel();
+    _ordersSubscription = null;
+    emit(OrdersLoaded(const []));
+  }
+
+  Future<void> loadOrders() async {
+    final activeUser = await secureStorageService.getActiveUser();
+    if (activeUser != null) {
+      await loadOrdersForUser(activeUser);
+      return;
+    }
+
+    // إذا لم يكن هناك مستخدم مسجل الدخول، لا يتم عرض أي طلبات لحماية الخصوصية
+    await clearOrders();
+  }
+
+  /// تحديث شامل لكافة الطلبات الخاصة بالمستخدم المسجل حالياً
   Future<void> refreshAllOrders() async {
     try {
-      final deviceId = await secureStorageService.getOrCreateDeviceId();
-      final latestOrders = await orderRepository.getOrdersByDevice(deviceId);
+      var user = _currentUser;
+      user ??= await secureStorageService.getActiveUser();
+      if (user == null) {
+        emit(OrdersLoaded(const []));
+        return;
+      }
+      _currentUser = user;
+
+      final latestOrders = await orderRepository.getOrdersForUser(user);
       final baseList = await _mergeWithLocalCache(latestOrders);
 
       final updatedList = <OrderModel>[];
@@ -173,6 +198,8 @@ class OrdersCubit extends Cubit<OrdersState> {
     String? contactPhone,
     String? contactEmail,
     String? paymentId,
+    int? userId,
+    String? accountNumber,
   }) async {
     emit(OrderSubmitting());
     try {
@@ -181,6 +208,9 @@ class OrdersCubit extends Cubit<OrdersState> {
         await secureStorageService.saveTelegramUser(telegramUser);
       }
 
+      final resolvedUserId = userId ?? _currentUser?.id;
+      final resolvedAccountNumber = accountNumber ?? _currentUser?.accountNumber;
+
       final result = await orderRepository.submitOrder(
         items: items,
         deviceId: deviceId,
@@ -188,6 +218,8 @@ class OrdersCubit extends Cubit<OrdersState> {
         contactPhone: contactPhone,
         contactEmail: contactEmail,
         paymentId: paymentId,
+        userId: resolvedUserId,
+        accountNumber: resolvedAccountNumber,
       );
 
       final successState = OrderSubmitSuccess(
@@ -211,6 +243,8 @@ class OrdersCubit extends Cubit<OrdersState> {
         currency: 'USD',
         createdAt: DateTime.now(),
         contactPhone: contactPhone,
+        userId: userId ?? _currentUser?.id,
+        accountNumber: accountNumber ?? _currentUser?.accountNumber,
       );
       return OrderSubmitResult(
         isSuccess: false,

@@ -153,7 +153,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { items, external_order_id, device_id, telegram_user, contact_phone, contact_email, payment_id } = req.body || {};
+    const { items, external_order_id, device_id, telegram_user, contact_phone, contact_email, payment_id, user_id, account_number } = req.body || {};
     const externalId = external_order_id || `ord_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
     const orderPayload = {
@@ -230,14 +230,16 @@ export default async function handler(req, res) {
         currency: sellerOrder.total?.currency || 'USD',
         idempotency_key: externalId,
         delivered_assets: deliveredAssetsList || (deliveredKey ? [{ type: 'key', value: deliveredKey }] : null),
-        payment_id: payment_id || null
+        payment_id: payment_id || null,
+        user_id: user_id || null,
+        account_number: account_number || null
       };
 
       const supaRes = await fetch(`${SUPABASE_URL}/rest/v1/orders`, {
         method: 'POST',
         headers: {
-          'apikey': SUPABASE_ANON,
-          'Authorization': `Bearer ${SUPABASE_ANON}`,
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
           'Content-Type': 'application/json',
           'Prefer': 'return=representation'
         },

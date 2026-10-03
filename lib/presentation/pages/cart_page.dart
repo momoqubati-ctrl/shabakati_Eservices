@@ -217,13 +217,15 @@ class CartPage extends StatelessWidget {
               telegramUser: telegramUser,
               contactPhone: effectivePhone,
               paymentId: paymentResult.paymentId,
+              userId: currentUser.id,
+              accountNumber: currentUser.accountNumber,
             );
 
             if (!context.mounted) return;
             Navigator.pop(context); // إغلاق ديالوج جاري التحقق وتنفيذ العملية
 
             cartCubit.clearCart();
-            ordersCubit.loadOrders();
+            ordersCubit.loadOrdersForUser(currentUser);
 
             final order = submitResult.order;
             final isVaultSuccess = submitResult.isSuccess;

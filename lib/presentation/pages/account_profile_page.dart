@@ -7,6 +7,7 @@ import '../../data/models/user_account_model.dart';
 import '../../logic/auth/auth_cubit.dart';
 import '../../logic/auth/auth_state.dart';
 import '../../logic/cart/cart_cubit.dart';
+import '../../logic/orders/orders_cubit.dart';
 import 'auth/login_page.dart';
 
 class AccountProfilePage extends StatefulWidget {
@@ -268,6 +269,76 @@ class _AccountProfilePageState extends State<AccountProfilePage> {
     }
   }
 
+  Future<void> _confirmFinalLogout(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.red.withAlpha(30),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.warning_amber_rounded, color: Colors.red),
+              ),
+              const SizedBox(width: 12),
+              const Text('تسجيل الخروج النهائي', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ],
+          ),
+          content: const Text(
+            'هل أنت متأكد من تسجيل الخروج النهائي ومسح كافة بيانات التطبيق من هذا الجهاز؟\n\n'
+            '• سيتم مسح بيانات الجلسة الحالية بالكامل.\n'
+            '• سيتم تفريغ السلة ومسح سجل الطلبات المعروضة محلياً.\n'
+            '• لن تظهر بيانات أو طلبات هذا الحساب لأي مستخدم آخر على هذا الهاتف.\n'
+            '• سيتعين عليك إدخال كلمة السر مجدداً عند الرغبة في الدخول.',
+            style: TextStyle(fontSize: 13, height: 1.5),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('إلغاء'),
+            ),
+            FilledButton.icon(
+              icon: const Icon(Icons.delete_forever_rounded, size: 18),
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.pop(ctx, true),
+              label: const Text('تأكيد ومسح البيانات'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      final messenger = ScaffoldMessenger.of(context);
+      final cubit = context.read<AuthCubit>();
+      final ordersCubit = context.read<OrdersCubit>();
+      final cartCubit = context.read<CartCubit>();
+
+      await cubit.finalLogout();
+      await ordersCubit.clearOrders();
+      cartCubit.clearCart();
+
+      if (mounted) {
+        setState(() {
+          _isBiometricEnabled = false;
+          _remainingSessionTime = null;
+        });
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('تم تسجيل الخروج النهائي ومسح كافة بيانات التطبيق بأمان'),
+            backgroundColor: Colors.teal,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -279,6 +350,13 @@ class _AccountProfilePageState extends State<AccountProfilePage> {
         appBar: AppBar(
           title: const Text('حسابي وبيانات الدخول', style: TextStyle(fontWeight: FontWeight.bold)),
           centerTitle: false,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.power_settings_new_rounded, color: Colors.red),
+              tooltip: 'تسجيل الخروج النهائي ومسح البيانات',
+              onPressed: () => _confirmFinalLogout(context),
+            ),
+          ],
         ),
         body: BlocBuilder<AuthCubit, AuthState>(
           builder: (context, state) {
@@ -497,18 +575,39 @@ class _AccountProfilePageState extends State<AccountProfilePage> {
                 ),
                 const SizedBox(height: 32),
 
-                // زر تسجيل الخروج
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.logout_rounded, color: Colors.red),
-                  label: const Text('تسجيل الخروج', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Colors.red),
+                // زر تسجيل الخروج النهائي ومسح كافة بيانات التطبيق
+                FilledButton.icon(
+                  icon: const Icon(Icons.power_settings_new_rounded, color: Colors.white, size: 20),
+                  label: const Text(
+                    'تسجيل الخروج النهائي ومسح بيانات التطبيق',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.red.shade700,
+                    foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: () => _confirmFinalLogout(context),
+                ),
+                const SizedBox(height: 12),
+
+                // زر تسجيل خروج عادي
+                OutlinedButton.icon(
+                  icon: Icon(Icons.logout_rounded, color: Colors.grey.shade700, size: 18),
+                  label: Text(
+                    'تسجيل خروج عادي',
+                    style: TextStyle(color: Colors.grey.shade800, fontWeight: FontWeight.w600, fontSize: 13),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: Colors.grey.shade400),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
                   onPressed: () async {
                     await cubit.logout();
                     if (context.mounted) {
+                      context.read<OrdersCubit>().clearOrders();
                       context.read<CartCubit>().clearCart();
                     }
                     setState(() {});

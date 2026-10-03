@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/services/whatsapp_launcher.dart';
+import '../../logic/auth/auth_cubit.dart';
+import '../../logic/auth/auth_state.dart';
 import '../../logic/cart/cart_cubit.dart';
+import '../../logic/orders/orders_cubit.dart';
 import 'account_profile_page.dart';
 import 'cart_page.dart';
 import 'catalog_page.dart';
@@ -18,6 +21,18 @@ class _HomeNavigationPageState extends State<HomeNavigationPage> {
   int _currentIndex = 0;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final authState = context.read<AuthCubit>().state;
+      if (authState is AuthSuccess) {
+        context.read<OrdersCubit>().loadOrdersForUser(authState.user);
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final cartState = context.watch<CartCubit>().state;
     final bool hasCartBar = _currentIndex == 1 && cartState.items.isNotEmpty;
@@ -31,13 +46,22 @@ class _HomeNavigationPageState extends State<HomeNavigationPage> {
       const AccountProfilePage(),
     ];
 
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        body: IndexedStack(
-          index: _currentIndex,
-          children: pages,
-        ),
+    return BlocListener<AuthCubit, AuthState>(
+      listener: (context, authState) {
+        if (authState is AuthSuccess) {
+          context.read<OrdersCubit>().loadOrdersForUser(authState.user);
+        } else if (authState is AuthInitial) {
+          context.read<OrdersCubit>().clearOrders();
+          context.read<CartCubit>().clearCart();
+        }
+      },
+      child: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          body: IndexedStack(
+            index: _currentIndex,
+            children: pages,
+          ),
         floatingActionButtonLocation: _SupportFabLocation(hasCartBar: hasCartBar),
         floatingActionButton: FloatingActionButton(
           heroTag: 'whatsapp_support_fab',
@@ -86,8 +110,9 @@ class _HomeNavigationPageState extends State<HomeNavigationPage> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 class _SupportFabLocation extends FloatingActionButtonLocation {

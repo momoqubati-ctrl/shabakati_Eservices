@@ -116,5 +116,13 @@ class SecureStorageService {
       return null;
     }
   }
+
+  /// مسح نهائي وشامل لكافة بيانات التطبيق والتخزين المشفر عند تسجيل الخروج النهائي
+  Future<void> wipeAllData() async {
+    await _storage.deleteAll();
+    // إنشاء معرف جهاز جديد ونظيف للجلسات اللاحقة
+    final newDeviceId = 'dev_${const Uuid().v4()}';
+    await _storage.write(key: _keyDeviceId, value: newDeviceId);
+  }
 }
 
