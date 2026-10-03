@@ -7,8 +7,7 @@ class CheckoutWarningDialog extends StatefulWidget {
   final int itemsCount;
   final String? initialTelegramUser;
   final String? initialPhone;
-  final Function(String telegramUser, String phone, String paymentMethod) onConfirm;
-  final Function(String telegramUser, String phone)? onPayWithBasGate;
+  final Function(String telegramUser, String phone) onPayWithBasGate;
 
   const CheckoutWarningDialog({
     super.key,
@@ -18,8 +17,7 @@ class CheckoutWarningDialog extends StatefulWidget {
     required this.itemsCount,
     this.initialTelegramUser,
     this.initialPhone,
-    required this.onConfirm,
-    this.onPayWithBasGate,
+    required this.onPayWithBasGate,
   });
 
   @override
@@ -28,9 +26,7 @@ class CheckoutWarningDialog extends StatefulWidget {
 
 class _CheckoutWarningDialogState extends State<CheckoutWarningDialog> {
   late final TextEditingController _phoneController;
-  String _selectedPaymentMethod = 'بطاقة بنكية / ميزة / فيزا';
   bool _acceptedTerms = true;
-  bool _showOtherPaymentMethods = false;
 
   @override
   void initState() {
@@ -185,149 +181,93 @@ class _CheckoutWarningDialogState extends State<CheckoutWarningDialog> {
               const SizedBox(height: 16),
 
               // زر الدفع المباشر عبر المحافظ الإلكترونية (BasGate)
-              if (widget.onPayWithBasGate != null) ...[
-                Container(
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF0F3E76), Color(0xFF1E60B8)],
-                      begin: Alignment.topRight,
-                      end: Alignment.bottomLeft,
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF1E60B8).withAlpha(70),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
+              Container(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF0F3E76), Color(0xFF1E60B8)],
+                    begin: Alignment.topRight,
+                    end: Alignment.bottomLeft,
                   ),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(16),
-                      onTap: !_acceptedTerms
-                          ? null
-                          : () {
-                              Navigator.pop(context);
-                              widget.onPayWithBasGate!(
-                                widget.initialTelegramUser ?? '',
-                                _phoneController.text.trim(),
-                              );
-                            },
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withAlpha(45),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.account_balance_wallet_rounded,
-                                color: Colors.white,
-                                size: 26,
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'الدفع المباشر بالمحافظ الإلكترونية',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'كاش، ون كاش، فلوسك، جوالي، بيس، وغيرها...',
-                                    style: TextStyle(
-                                      color: Colors.white.withAlpha(220),
-                                      fontSize: 11.5,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 16),
-                          ],
-                        ),
-                      ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF1E60B8).withAlpha(70),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
                     ),
-                  ),
+                  ],
                 ),
-                const SizedBox(height: 12),
-              ],
-
-              // خيار طرق الدفع التقليدية الأخرى
-              InkWell(
-                onTap: () => setState(() => _showOtherPaymentMethods = !_showOtherPaymentMethods),
-                borderRadius: BorderRadius.circular(8),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        _showOtherPaymentMethods ? 'إخفاء طرق الدفع الأخرى' : 'طرق دفع أخرى (بطاقة بنكية / حوالة)',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: colorScheme.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: !_acceptedTerms
+                        ? null
+                        : () {
+                            final phone = _phoneController.text.trim();
+                            if (phone.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('يرجى إدخال رقم الهاتف / الواتساب للمتابعة'),
+                                  backgroundColor: Colors.orange,
+                                ),
+                              );
+                              return;
+                            }
+                            Navigator.pop(context);
+                            widget.onPayWithBasGate(
+                              widget.initialTelegramUser ?? '',
+                              phone,
+                            );
+                          },
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withAlpha(45),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.account_balance_wallet_rounded,
+                              color: Colors.white,
+                              size: 26,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'الدفع بالمحافظ الإلكترونية',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'كاش، ون كاش، فلوسك، جوالي، بيس، وغيرها...',
+                                  style: TextStyle(
+                                    color: Colors.white.withAlpha(220),
+                                    fontSize: 11.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 16),
+                        ],
                       ),
-                      Icon(
-                        _showOtherPaymentMethods ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
-                        size: 18,
-                        color: colorScheme.primary,
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
-
-              if (_showOtherPaymentMethods) ...[
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  initialValue: _selectedPaymentMethod,
-                  decoration: InputDecoration(
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  ),
-                  items: const [
-                    DropdownMenuItem(value: 'بطاقة بنكية / ميزة / فيزا', child: Text('💳 بطاقة بنكية (Visa / MasterCard)')),
-                    DropdownMenuItem(value: 'Apple Pay / Google Pay', child: Text('📱 Apple Pay / Google Pay')),
-                    DropdownMenuItem(value: 'تحويل بنكي مباشر', child: Text('🏦 تحويل بنكي / صرافة')),
-                  ],
-                  onChanged: (val) {
-                    if (val != null) setState(() => _selectedPaymentMethod = val);
-                  },
-                ),
-                const SizedBox(height: 12),
-                FilledButton.tonal(
-                  onPressed: !_acceptedTerms
-                      ? null
-                      : () {
-                          Navigator.pop(context);
-                          widget.onConfirm(
-                            widget.initialTelegramUser ?? '',
-                            _phoneController.text.trim(),
-                            _selectedPaymentMethod,
-                          );
-                        },
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 13),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: const Text('متابعة بالطريقة المحددة'),
-                ),
-              ],
+              const SizedBox(height: 12),
 
               const SizedBox(height: 12),
               OutlinedButton(
