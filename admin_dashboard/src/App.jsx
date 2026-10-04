@@ -58,18 +58,23 @@ export function App() {
           .order('created_at', { ascending: false }),
         supabase
           .from('payments')
-          .select('id, external_order_id, payment_reference, wallet_name, provider, status, user_account, created_at')
+          .select('id, external_order_id, amount, currency, payment_reference, wallet_name, provider, status, user_account, metadata, created_at')
           .order('created_at', { ascending: false })
-          .limit(200),
+          .limit(500),
       ]);
 
       if (!error && data) {
         const paymentsById = {};
         const paymentsByOrderId = {};
+        const paymentsByRef = {};
         if (Array.isArray(paymentsData)) {
           paymentsData.forEach((p) => {
             if (p.id) paymentsById[p.id] = p;
             if (p.external_order_id) paymentsByOrderId[p.external_order_id] = p;
+            if (p.payment_reference) paymentsByRef[p.payment_reference] = p;
+            if (p.metadata?.consumed_by_order) {
+              paymentsByOrderId[p.metadata.consumed_by_order] = p;
+            }
           });
         }
 
@@ -82,7 +87,16 @@ export function App() {
           const matchedPayment =
             (o.payment_id && paymentsById[o.payment_id]) ||
             (o.external_order_id && paymentsByOrderId[o.external_order_id]) ||
+            (o.payment_reference && paymentsByRef[o.payment_reference]) ||
             null;
+
+          const rawAmountYer = matchedPayment?.amount
+            ? Number(matchedPayment.amount)
+            : o.paid_amount_yer
+              ? Number(o.paid_amount_yer)
+              : o.total_cents === 189
+                ? 1500
+                : Math.round(((o.total_cents || 0) / 100) * (exchangeRate || 535));
 
           const enriched = {
             ...o,
@@ -95,6 +109,10 @@ export function App() {
               null,
             payment_method: o.payment_method || 'المحافظ الإلكترونية',
             wallet_name: o.wallet_name || matchedPayment?.wallet_name || null,
+            paid_amount_yer: rawAmountYer,
+            gateway_order_id: o.external_order_id || matchedPayment?.external_order_id || null,
+            gateway_raw_order_id: matchedPayment?.external_order_id || null,
+            digital_vault_ref: o.seller_order_id ? `#${o.seller_order_id}` : null,
           };
 
           const key = enriched.id || enriched.external_order_id;

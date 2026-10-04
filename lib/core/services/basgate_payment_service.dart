@@ -102,6 +102,7 @@ class BasGatePaymentService {
 
       trxToken = initData['trx_token']?.toString();
       createdPaymentId = initData['payment_id']?.toString();
+      final effectiveOrderId = initData['order_id']?.toString() ?? orderId;
       final env = initData['environment']?.toString() ?? 'prod';
       final isProd = env == 'prod' || env == 'live';
 
@@ -109,7 +110,7 @@ class BasGatePaymentService {
         return BasGatePaymentResult(
           isSuccess: false,
           paymentId: createdPaymentId,
-          orderId: orderId,
+          orderId: effectiveOrderId,
           message: 'لم يتم استلام رمز المعاملة (trxToken) من الخادم.',
         );
       }
@@ -154,7 +155,7 @@ class BasGatePaymentService {
       final verifyUrl = '${ApiConfig.vercelBackendUrl}/api/basgate-verify';
       final verifyRes = await _dio.post(verifyUrl, data: {
         'payment_id': createdPaymentId,
-        'order_id': orderId,
+        'order_id': effectiveOrderId,
         'sdk_result_status': isSdkSuccess,
         'sdk_message': sdkMessage,
       });
@@ -177,7 +178,7 @@ class BasGatePaymentService {
           paymentReference: paymentReference,
           paymentMethod: paymentMethod,
           walletName: walletName,
-          orderId: orderId,
+          orderId: effectiveOrderId,
           trxToken: trxToken,
           statusCode: 1202,
           rawResponse: verifyData,
@@ -190,7 +191,7 @@ class BasGatePaymentService {
           isCancelled: true,
           message: 'تم إلغاء عملية الدفع. لم يتم خصم أي مبلغ من حسابك.',
           paymentId: createdPaymentId,
-          orderId: orderId,
+          orderId: effectiveOrderId,
           trxToken: trxToken,
           rawResponse: verifyData,
         );
@@ -200,7 +201,7 @@ class BasGatePaymentService {
         isSuccess: false,
         message: verifyData['message']?.toString() ?? sdkMessage ?? 'تعثر إتمام عملية الدفع.',
         paymentId: createdPaymentId,
-        orderId: orderId,
+        orderId: effectiveOrderId,
         trxToken: trxToken,
         statusCode: sdkCode,
         rawResponse: verifyData,

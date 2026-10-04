@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:uuid/uuid.dart';
 import '../../core/services/basgate_payment_service.dart';
 import '../../core/services/secure_storage_service.dart';
 import '../../core/services/whatsapp_launcher.dart';
@@ -169,8 +170,8 @@ class CartPage extends StatelessWidget {
             ),
           );
 
-          // 2. تشغيل تدفق الدفع عبر البوابة
-          final orderId = 'ORD_${DateTime.now().millisecondsSinceEpoch}';
+          // 2. تشغيل تدفق الدفع عبر البوابة برقم طلب شبكتي الموحد وغير المتكرر (#xxxxxxxx-xxx)
+          final orderId = 'ord_${const Uuid().v4().substring(0, 12)}';
           final effectivePhone = phone.isNotEmpty ? phone : savedPhone;
 
           final paymentResult = await basGateService.payWithBasGate(
@@ -241,6 +242,7 @@ class CartPage extends StatelessWidget {
 
             final submitResult = await ordersCubit.submitOrder(
               items: cartState.items,
+              externalOrderId: paymentResult.orderId ?? orderId,
               telegramUser: telegramUser,
               contactPhone: effectivePhone,
               paymentId: paymentResult.paymentId,

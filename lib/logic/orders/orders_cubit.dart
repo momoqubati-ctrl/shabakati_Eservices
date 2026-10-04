@@ -194,6 +194,7 @@ class OrdersCubit extends Cubit<OrdersState> {
 
   Future<OrderSubmitResult> submitOrder({
     required List<CartItemModel> items,
+    String? externalOrderId,
     String? telegramUser,
     String? contactPhone,
     String? contactEmail,
@@ -217,6 +218,7 @@ class OrdersCubit extends Cubit<OrdersState> {
       final result = await orderRepository.submitOrder(
         items: items,
         deviceId: deviceId,
+        externalOrderId: externalOrderId,
         telegramUser: telegramUser,
         contactPhone: contactPhone,
         contactEmail: contactEmail,
@@ -242,7 +244,7 @@ class OrdersCubit extends Cubit<OrdersState> {
       final errorMsg = e.toString().replaceAll('Exception: ', '');
       emit(OrderSubmitError(errorMsg));
       final fallbackOrder = OrderModel(
-        externalOrderId: 'ord_${DateTime.now().millisecondsSinceEpoch}',
+        externalOrderId: externalOrderId ?? 'ord_${DateTime.now().millisecondsSinceEpoch}',
         status: 'paid',
         fulfillmentStatus: 'processing',
         totalCents: 0,

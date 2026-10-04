@@ -183,8 +183,11 @@ export const DashboardOverview = ({
               <tr>
                 <th className="p-3.5">رقم الطلب</th>
                 <th className="p-3.5">حساب تيليجرام / العميل</th>
-                <th className="p-3.5">المبلغ</th>
+                <th className="p-3.5">المبلغ (USD)</th>
+                <th className="p-3.5">المبلغ المدفوع (ر.ي)</th>
                 <th className="p-3.5">رقم مرجع الدفع</th>
+                <th className="p-3.5">مرجع بوابة الدفع</th>
+                <th className="p-3.5">مرجع Digital Vault</th>
                 <th className="p-3.5">حالة التنفيذ</th>
                 <th className="p-3.5">المفتاح المسلم</th>
                 <th className="p-3.5 text-center">إجراءات</th>
@@ -199,6 +202,8 @@ export const DashboardOverview = ({
                 const isReady = order.fulfillment_status === 'ready' || order.status === 'completed' || hasKey;
                 const isFailed = order.fulfillment_status === 'failed' || order.status === 'cancelled';
                 const paymentRef = order.payment_reference || order.payment_id;
+                const gatewayRef = order.gateway_order_id || order.external_order_id;
+                const paidYer = order.paid_amount_yer ?? (order.total_cents === 189 ? 1500 : Math.round(((order.total_cents || 0) / 100) * 535));
                 return (
                   <tr key={order.id || order.external_order_id} className="hover:bg-slate-50/50 dark:hover:bg-slate-750">
                     <td className="p-3.5 font-mono font-bold text-blue-600 dark:text-blue-400">
@@ -210,6 +215,9 @@ export const DashboardOverview = ({
                     <td className="p-3.5 font-bold text-slate-900 dark:text-white">
                       ${((order.total_cents || 0) / 100).toFixed(2)} USD
                     </td>
+                    <td className="p-3.5 font-extrabold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                      {paidYer ? `${Number(paidYer).toLocaleString('en-US')} ر.ي` : '—'}
+                    </td>
                     <td className="p-3.5 font-mono">
                       {paymentRef ? (
                         <span className="font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-md inline-block text-[11px]">
@@ -217,6 +225,27 @@ export const DashboardOverview = ({
                         </span>
                       ) : (
                         <span className="text-slate-400 text-[11px]">غير مسجل</span>
+                      )}
+                    </td>
+                    <td className="p-3.5 font-mono">
+                      {gatewayRef ? (
+                        <span className="font-bold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/60 px-2 py-0.5 rounded-md inline-block text-[11px]">
+                          {gatewayRef}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 text-[11px]">غير متوفر</span>
+                      )}
+                    </td>
+                    <td className="p-3.5 font-mono">
+                      {order.seller_order_id ? (
+                        <div className="space-y-0.5">
+                          <span className="font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded-md inline-block text-[11px]">
+                            #{order.seller_order_id}
+                          </span>
+                          <span className="block text-[10px] text-slate-400">{order.external_order_id}</span>
+                        </div>
+                      ) : (
+                        <span className="text-amber-600 dark:text-amber-400 text-[11px]">غير منفذ</span>
                       )}
                     </td>
                     <td className="p-3.5">
@@ -246,7 +275,7 @@ export const DashboardOverview = ({
               })}
               {orders.length === 0 && (
                 <tr>
-                  <td colSpan="7" className="p-8 text-center text-slate-400">
+                  <td colSpan="10" className="p-8 text-center text-slate-400">
                     لا توجد طلبات مسجلة حتى الآن.
                   </td>
                 </tr>

@@ -48,14 +48,17 @@ export const OperationsReports = ({ orders = [] }) => {
       return;
     }
 
-    const headers = ['Order ID', 'Created At', 'Telegram User', 'Phone', 'Total USD', 'Payment Reference', 'Payment Method', 'Wallet', 'Status', 'Fulfillment'];
+    const headers = ['Order ID', 'Created At', 'Telegram User', 'Phone', 'Total USD', 'Paid Amount YER', 'Payment Reference', 'Payment Gateway Ref', 'Digital Vault Ref', 'Payment Method', 'Wallet', 'Status', 'Fulfillment'];
     const rows = orders.map(o => [
       o.external_order_id,
       new Date(o.created_at).toISOString(),
       o.telegram_user || '',
       o.contact_phone || '',
       ((o.total_cents || 0) / 100).toFixed(2),
+      o.paid_amount_yer ?? (o.total_cents === 189 ? 1500 : Math.round(((o.total_cents || 0) / 100) * 535)),
       o.payment_reference || o.payment_id || '',
+      o.gateway_order_id || o.external_order_id || '',
+      o.seller_order_id ? `#${o.seller_order_id}` : '',
       o.payment_method || 'المحافظ الإلكترونية',
       o.wallet_name || '',
       o.status,

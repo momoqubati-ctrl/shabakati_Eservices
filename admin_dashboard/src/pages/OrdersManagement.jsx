@@ -37,12 +37,14 @@ export const OrdersManagement = ({ orders = [], onSelectOrder }) => {
     if (!searchTerm.trim()) return true;
     const term = searchTerm.toLowerCase();
     const idMatch = order.external_order_id?.toLowerCase().includes(term);
+    const gwMatch = order.gateway_order_id?.toLowerCase().includes(term) || order.gateway_raw_order_id?.toLowerCase().includes(term);
+    const dvMatch = order.seller_order_id?.toString().includes(term);
     const tgMatch = order.telegram_user?.toLowerCase().includes(term);
     const phoneMatch = order.contact_phone?.toLowerCase().includes(term);
     const deviceMatch = order.device_id?.toLowerCase().includes(term);
     const refMatch = order.payment_reference?.toLowerCase().includes(term) || order.payment_id?.toLowerCase().includes(term);
     const walletMatch = order.wallet_name?.toLowerCase().includes(term);
-    return idMatch || tgMatch || phoneMatch || deviceMatch || refMatch || walletMatch;
+    return idMatch || gwMatch || dvMatch || tgMatch || phoneMatch || deviceMatch || refMatch || walletMatch;
   });
 
   return (
@@ -56,7 +58,7 @@ export const OrdersManagement = ({ orders = [], onSelectOrder }) => {
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="ابحث برقم الطلب، مرجع الدفع، يوزر تيليجرام، أو الهاتف..."
+            placeholder="ابحث برقم الطلب، مرجع البوابة، مرجع الدفع، Digital Vault أو الهاتف..."
             className="w-full pl-4 pr-10 py-2.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
           />
         </div>
@@ -118,8 +120,11 @@ export const OrdersManagement = ({ orders = [], onSelectOrder }) => {
                 <th className="p-4">رقم الطلب</th>
                 <th className="p-4">تاريخ الطلب</th>
                 <th className="p-4">العميل / التواصل</th>
-                <th className="p-4">المبلغ</th>
+                <th className="p-4">المبلغ (USD)</th>
+                <th className="p-4">المبلغ المدفوع (ر.ي)</th>
                 <th className="p-4">رقم مرجع الدفع</th>
+                <th className="p-4">مرجع بوابة الدفع</th>
+                <th className="p-4">مرجع Digital Vault</th>
                 <th className="p-4">حالة التنفيذ</th>
                 <th className="p-4">المفتاح المسلم</th>
                 <th className="p-4 text-center">الإجراءات</th>
@@ -134,12 +139,14 @@ export const OrdersManagement = ({ orders = [], onSelectOrder }) => {
                 const isReady = order.fulfillment_status === 'ready' || order.status === 'completed' || hasKey;
                 const isFailed = order.fulfillment_status === 'failed' || order.status === 'cancelled';
                 const paymentRef = order.payment_reference || order.payment_id;
+                const gatewayRef = order.gateway_order_id || order.external_order_id;
+                const paidYer = order.paid_amount_yer ?? (order.total_cents === 189 ? 1500 : Math.round(((order.total_cents || 0) / 100) * 535));
                 return (
                   <tr key={order.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-750/50 transition-colors">
                     <td className="p-4 font-mono font-bold text-blue-600 dark:text-blue-400">
                       #{order.external_order_id?.replace('ord_', '')}
                     </td>
-                    <td className="p-4 text-slate-500">
+                    <td className="p-4 text-slate-500 whitespace-nowrap">
                       {new Date(order.created_at).toLocaleDateString('ar-SA', {
                         month: 'short',
                         day: 'numeric',
@@ -156,8 +163,13 @@ export const OrdersManagement = ({ orders = [], onSelectOrder }) => {
                         <span className="text-slate-500">{order.contact_phone || 'تطبيق الموبايل'}</span>
                       )}
                     </td>
-                    <td className="p-4 font-extrabold text-slate-900 dark:text-white">
+                    <td className="p-4 font-extrabold text-slate-900 dark:text-white whitespace-nowrap">
                       ${((order.total_cents || 0) / 100).toFixed(2)} USD
+                    </td>
+                    <td className="p-4 font-extrabold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                      <span className="bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-lg inline-block">
+                        {paidYer ? `${Number(paidYer).toLocaleString('en-US')} ر.ي` : '—'}
+                      </span>
                     </td>
                     <td className="p-4">
                       {paymentRef ? (
@@ -174,6 +186,38 @@ export const OrdersManagement = ({ orders = [], onSelectOrder }) => {
                         </div>
                       ) : (
                         <span className="text-slate-400 text-[11px]">غير مسجل</span>
+                      )}
+                    </td>
+                    <td className="p-4 font-mono">
+                      {gatewayRef ? (
+                        <div className="space-y-0.5">
+                          <span className="font-bold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/60 px-2 py-0.5 rounded-md inline-block text-[11px]">
+                            {gatewayRef}
+                          </span>
+                          {order.gateway_raw_order_id && order.gateway_raw_order_id !== gatewayRef && (
+                            <span className="block text-[10px] text-slate-400" title="معرف المعاملة المرسل للبوابة">
+                              {order.gateway_raw_order_id}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-slate-400 text-[11px]">غير متوفر</span>
+                      )}
+                    </td>
+                    <td className="p-4 font-mono">
+                      {order.seller_order_id ? (
+                        <div className="space-y-0.5">
+                          <span className="font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded-md inline-block text-[11px]">
+                            #{order.seller_order_id}
+                          </span>
+                          <span className="block text-[10px] text-slate-400">
+                            {order.external_order_id}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-amber-600 dark:text-amber-400 text-[11px] font-semibold">
+                          غير منفذ لدى المزود
+                        </span>
                       )}
                     </td>
                     <td className="p-4">
@@ -214,7 +258,7 @@ export const OrdersManagement = ({ orders = [], onSelectOrder }) => {
               })}
               {filteredOrders.length === 0 && (
                 <tr>
-                  <td colSpan="8" className="p-12 text-center text-slate-400">
+                  <td colSpan="11" className="p-12 text-center text-slate-400">
                     لم يتم العثور على أي طلبات مطابقة للفلترة أو البحث.
                   </td>
                 </tr>

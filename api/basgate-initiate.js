@@ -49,6 +49,39 @@ async function insertSupabase(table, data, supabaseKey) {
   }
 }
 
+async function isOrderIdTaken(orderId, supabaseKey) {
+  try {
+    const [payRes, ordRes] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/payments?external_order_id=eq.${encodeURIComponent(orderId)}&select=id&limit=1`, {
+        headers: { 'apikey': supabaseKey, 'Authorization': `Bearer ${supabaseKey}` }
+      }),
+      fetch(`${SUPABASE_URL}/rest/v1/orders?external_order_id=eq.${encodeURIComponent(orderId)}&select=id&limit=1`, {
+        headers: { 'apikey': supabaseKey, 'Authorization': `Bearer ${supabaseKey}` }
+      })
+    ]);
+    const payRows = payRes.ok ? await payRes.json().catch(() => []) : [];
+    const ordRows = ordRes.ok ? await ordRes.json().catch(() => []) : [];
+    return (Array.isArray(payRows) && payRows.length > 0) || (Array.isArray(ordRows) && ordRows.length > 0);
+  } catch (_) {
+    return false;
+  }
+}
+
+async function resolveUniqueShabakatiOrderId(rawOrderId, supabaseKey) {
+  const trimmed = String(rawOrderId || '').trim();
+  // إذا كان الرقم مرسلاً بصيغة شبكتي القياسية ord_xxxxxxxx-xxx، نستخدمه بشرط عدم تكراره؛ وإلا نولّد رقماً فريداً بنفس الصيغة
+  let candidate = /^ord_[0-9a-f]{8}-[0-9a-f]{3}$/i.test(trimmed)
+    ? trimmed.toLowerCase()
+    : `ord_${crypto.randomUUID().substring(0, 12)}`;
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const taken = await isOrderIdTaken(candidate, supabaseKey);
+    if (!taken) return candidate;
+    candidate = `ord_${crypto.randomUUID().substring(0, 12)}`;
+  }
+  return `ord_${crypto.randomUUID().substring(0, 12)}`;
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -158,8 +191,8 @@ export default async function handler(req, res) {
       });
     }
 
-    // 2. تجهيز معرف المعاملة والطلب
-    const effectiveOrderId = order_id || `ORD_${Date.now()}`;
+    // 2. تجهيز معرف المعاملة والطلب الموحد من نظام شبكتي (ord_xxxxxxxx-xxx) مع ضمان عدم التكرار
+    const effectiveOrderId = await resolveUniqueShabakatiOrderId(order_id, SUPABASE_KEY);
     const timestampMs = Date.now();
     const paymentId = `PAY_${timestampMs}_${Math.random().toString(36).substring(2, 7)}`;
 

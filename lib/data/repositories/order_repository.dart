@@ -13,6 +13,7 @@ abstract class IOrderRepository {
   Future<OrderSubmitResult> submitOrder({
     required List<CartItemModel> items,
     required String deviceId,
+    String? externalOrderId,
     String? telegramUser,
     String? contactPhone,
     String? contactEmail,
@@ -56,6 +57,7 @@ class OrderRepository implements IOrderRepository {
   Future<OrderSubmitResult> submitOrder({
     required List<CartItemModel> items,
     required String deviceId,
+    String? externalOrderId,
     String? telegramUser,
     String? contactPhone,
     String? contactEmail,
@@ -66,7 +68,13 @@ class OrderRepository implements IOrderRepository {
     int? userId,
     String? accountNumber,
   }) async {
-    final externalOrderId = 'ord_${_uuid.v4().substring(0, 12)}';
+    final resolvedExternalOrderId =
+        (externalOrderId != null && externalOrderId.trim().isNotEmpty)
+            ? externalOrderId.trim()
+            : 'ord_${_uuid.v4().substring(0, 12)}';
+    final effectiveOrderId = resolvedExternalOrderId.startsWith('ord_')
+        ? resolvedExternalOrderId
+        : 'ord_$resolvedExternalOrderId';
 
     int totalCents = items.fold<int>(0, (sum, item) => sum + (item.product.sellerPrice.amountCents * item.quantity));
     String currency = items.isNotEmpty ? items.first.product.sellerPrice.currency : 'USD';
@@ -84,7 +92,7 @@ class OrderRepository implements IOrderRepository {
       final response = await _gatewayDio.post(
         '${ApiConfig.vercelBackendUrl}/api/orders',
         data: {
-          'external_order_id': externalOrderId,
+          'external_order_id': effectiveOrderId,
           'items': items.map((e) => {
             'product_id': e.product.id,
             'product_name': e.product.name,
@@ -120,17 +128,17 @@ class OrderRepository implements IOrderRepository {
           fulfillmentStatus = 'ready';
           orderStatus = 'completed';
           if (secureStorageService != null) {
-            await secureStorageService!.saveDeliveredAsset(externalOrderId, deliveredKey, deliveredUrl);
+            await secureStorageService!.saveDeliveredAsset(effectiveOrderId, deliveredKey, deliveredUrl);
           }
         } else if (fulfillmentStatus == 'ready' && sellerOrderId != null) {
           // 2. إذا كان التسليم فوري ومكتمل (ready)، نقوم باستهلاك المفتاح الرقمي فوراً
-          final assets = await _consumeDelivery(sellerOrderId, externalOrderId: externalOrderId);
+          final assets = await _consumeDelivery(sellerOrderId, externalOrderId: effectiveOrderId);
           deliveredKey = assets['key'];
           deliveredUrl = assets['url'];
           if (deliveredKey != null && deliveredKey.isNotEmpty) {
             orderStatus = 'completed';
             if (secureStorageService != null) {
-              await secureStorageService!.saveDeliveredAsset(externalOrderId, deliveredKey, deliveredUrl);
+              await secureStorageService!.saveDeliveredAsset(effectiveOrderId, deliveredKey, deliveredUrl);
             }
           }
         }
@@ -152,7 +160,7 @@ class OrderRepository implements IOrderRepository {
 
     // 3. إنشاء كائن الطلب دائماً وحفظه في Supabase لضمان بقاء العملية مسجلة ومعلقة حتى معالجة الدعم الفني
     final createdOrder = OrderModel(
-      externalOrderId: externalOrderId,
+      externalOrderId: effectiveOrderId,
       sellerOrderId: sellerOrderId,
       status: orderStatus,
       fulfillmentStatus: fulfillmentStatus,

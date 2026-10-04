@@ -65,11 +65,11 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
       setIsLoadingItems(false);
 
       // التحقق من بيانات مرجع الدفع والمحفظة الإلكترونية من جدول payments إذا لم تكن محملة
-      if (order && (!order.payment_reference || !order.wallet_name) && (order.payment_id || order.external_order_id)) {
+      if (order && (!order.payment_reference || !order.wallet_name || !order.paid_amount_yer) && (order.payment_id || order.external_order_id)) {
         try {
           let payQuery = supabase
             .from('payments')
-            .select('id, payment_reference, wallet_name, provider, status');
+            .select('id, external_order_id, amount, currency, payment_reference, wallet_name, provider, status, metadata');
           if (order.payment_id) {
             payQuery = payQuery.eq('id', order.payment_id);
           } else {
@@ -84,6 +84,9 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
               payment_reference: prev.payment_reference || p.payment_reference || p.id,
               payment_method: prev.payment_method || 'المحافظ الإلكترونية',
               wallet_name: prev.wallet_name || p.wallet_name || null,
+              paid_amount_yer: prev.paid_amount_yer || (p.amount ? Number(p.amount) : null),
+              gateway_order_id: prev.gateway_order_id || prev.external_order_id || p.external_order_id || null,
+              gateway_raw_order_id: prev.gateway_raw_order_id || p.external_order_id || null,
             }));
           }
         } catch (_) {}
@@ -635,17 +638,23 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 text-xs pt-2 border-t border-slate-200 dark:border-slate-700">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-2 border-t border-slate-200 dark:border-slate-700">
             <div>
-              <span className="text-slate-500 block">المبلغ الإجمالي:</span>
+              <span className="text-slate-500 block">التكلفة لدى المزود (USD):</span>
               <span className="font-bold text-slate-900 dark:text-white text-sm">
                 ${((currentOrder.total_cents || 0) / 100).toFixed(2)} USD
               </span>
             </div>
             <div>
-              <span className="text-slate-500 block">رقم طلب المزود:</span>
-              <span className="font-mono text-slate-900 dark:text-white font-bold">
-                {currentOrder.seller_order_id ? `#${currentOrder.seller_order_id}` : 'غير متوفر'}
+              <span className="text-slate-500 block">المبلغ المدفوع (ر.ي):</span>
+              <span className="font-extrabold text-emerald-600 dark:text-emerald-400 text-sm">
+                {Number(currentOrder.paid_amount_yer ?? (currentOrder.total_cents === 189 ? 1500 : Math.round(((currentOrder.total_cents || 0) / 100) * 535))).toLocaleString('en-US')} ر.ي
+              </span>
+            </div>
+            <div>
+              <span className="text-slate-500 block">مرجع مزود Digital Vault:</span>
+              <span className="font-mono text-purple-600 dark:text-purple-400 font-bold">
+                {currentOrder.seller_order_id ? `#${currentOrder.seller_order_id} (${currentOrder.external_order_id})` : 'غير منفذ بعد'}
               </span>
             </div>
           </div>
@@ -717,7 +726,16 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
 
               <div className="flex justify-between items-center">
                 <span className="text-slate-500 flex items-center gap-1.5">
-                  <DollarSign className="w-3.5 h-3.5 text-indigo-500" /> رقم مرجع عملية الدفع:
+                  <DollarSign className="w-3.5 h-3.5 text-emerald-500" /> المبلغ المدفوع بالريال اليمني:
+                </span>
+                <span className="font-extrabold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-lg text-[11px]">
+                  {Number(currentOrder.paid_amount_yer ?? (currentOrder.total_cents === 189 ? 1500 : Math.round(((currentOrder.total_cents || 0) / 100) * 535))).toLocaleString('en-US')} ر.ي
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 flex items-center gap-1.5">
+                  <DollarSign className="w-3.5 h-3.5 text-indigo-500" /> رقم مرجع الدفع (السند):
                 </span>
                 {(currentOrder.payment_reference || currentOrder.payment_id) ? (
                   <div className="flex items-center gap-1.5">
@@ -735,6 +753,52 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
                   </div>
                 ) : (
                   <span className="text-slate-400 text-[11px]">غير مسجل</span>
+                )}
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 flex items-center gap-1.5">
+                  <CreditCard className="w-3.5 h-3.5 text-sky-500" /> مرجع بوابة الدفع (Order ID):
+                </span>
+                {(currentOrder.gateway_order_id || currentOrder.external_order_id) ? (
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono font-bold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/60 px-2 py-0.5 rounded-md text-[11px] select-all">
+                      {currentOrder.gateway_order_id || currentOrder.external_order_id}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(currentOrder.gateway_order_id || currentOrder.external_order_id)}
+                      className="p-1 text-slate-400 hover:text-sky-500 rounded transition-colors"
+                      title="نسخ مرجع بوابة الدفع"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-slate-400 text-[11px]">غير متوفر</span>
+                )}
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 flex items-center gap-1.5">
+                  <Key className="w-3.5 h-3.5 text-purple-500" /> مرجع مزود Digital Vault:
+                </span>
+                {currentOrder.seller_order_id ? (
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded-md text-[11px] select-all">
+                      #{currentOrder.seller_order_id} — {currentOrder.external_order_id}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(`${currentOrder.seller_order_id}`)}
+                      className="p-1 text-slate-400 hover:text-purple-500 rounded transition-colors"
+                      title="نسخ رقم طلب المزود"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-amber-600 dark:text-amber-400 text-[11px] font-semibold">غير منفذ لدى المزود</span>
                 )}
               </div>
 
