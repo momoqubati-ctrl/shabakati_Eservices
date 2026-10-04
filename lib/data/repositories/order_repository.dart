@@ -38,9 +38,10 @@ class OrderRepository implements IOrderRepository {
   final Uuid _uuid = const Uuid();
   final Dio _gatewayDio = Dio(
     BaseOptions(
-      connectTimeout: const Duration(seconds: 12),
-      receiveTimeout: const Duration(seconds: 12),
-      sendTimeout: const Duration(seconds: 12),
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 30),
+      sendTimeout: const Duration(seconds: 30),
+      validateStatus: (status) => status != null && status < 500,
       headers: {'Accept': 'application/json'},
     ),
   );
@@ -66,10 +67,6 @@ class OrderRepository implements IOrderRepository {
     String? accountNumber,
   }) async {
     final externalOrderId = 'ord_${_uuid.v4().substring(0, 12)}';
-    final payloadItems = items.map((e) => {
-      'product_id': e.product.id,
-      'quantity': e.quantity,
-    }).toList();
 
     int totalCents = items.fold<int>(0, (sum, item) => sum + (item.product.sellerPrice.amountCents * item.quantity));
     String currency = items.isNotEmpty ? items.first.product.sellerPrice.currency : 'USD';
@@ -83,41 +80,30 @@ class OrderRepository implements IOrderRepository {
     String? providerError;
 
     try {
-      // 1. إرسال الطلب عبر بوابة الخادم المؤمنة (/api/orders) أو المزود الاحتياطي
-      Response response;
-      try {
-        response = await _gatewayDio.post(
-          '${ApiConfig.vercelBackendUrl}/api/orders',
-          data: {
-            'external_order_id': externalOrderId,
-            'items': items.map((e) => {
-              'product_id': e.product.id,
-              'product_name': e.product.name,
-              'quantity': e.quantity,
-              'unit_price_cents': e.product.sellerPrice.amountCents,
-              'currency': e.product.sellerPrice.currency,
-            }).toList(),
-            'device_id': deviceId,
-            'telegram_user': telegramUser,
-            'contact_phone': contactPhone,
-            'contact_email': contactEmail,
-            'payment_id': paymentId,
-            'payment_reference': paymentReference ?? paymentId,
-            'payment_method': paymentMethod ?? 'المحافظ الإلكترونية',
-            'wallet_name': walletName,
-            'user_id': userId,
-            'account_number': accountNumber,
-          },
-        );
-      } catch (_) {
-        response = await dioClient.dio.post(
-          '/orders',
-          data: {
-            'external_order_id': externalOrderId,
-            'items': payloadItems,
-          },
-        );
-      }
+      // 1. إرسال الطلب عبر بوابة الخادم المؤمنة (/api/orders)
+      final response = await _gatewayDio.post(
+        '${ApiConfig.vercelBackendUrl}/api/orders',
+        data: {
+          'external_order_id': externalOrderId,
+          'items': items.map((e) => {
+            'product_id': e.product.id,
+            'product_name': e.product.name,
+            'quantity': e.quantity,
+            'unit_price_cents': e.product.sellerPrice.amountCents,
+            'currency': e.product.sellerPrice.currency,
+          }).toList(),
+          'device_id': deviceId,
+          'telegram_user': telegramUser,
+          'contact_phone': contactPhone,
+          'contact_email': contactEmail,
+          'payment_id': paymentId,
+          'payment_reference': paymentReference ?? paymentId,
+          'payment_method': paymentMethod ?? 'المحافظ الإلكترونية',
+          'wallet_name': walletName,
+          'user_id': userId,
+          'account_number': accountNumber,
+        },
+      );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = response.data['data'] as Map<String, dynamic>;

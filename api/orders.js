@@ -7,25 +7,47 @@ const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL |
 const SUPABASE_ANON = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVudXRmd3Nwd3J6cHZobXRnZnRsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxODE3ODQsImV4cCI6MjEwNTc1Nzc4NH0.dRgwtfHV1OYWxeFKDon030mwesEIx_993cOQiAABTRs';
 
 
-function signRequest(method, pathWithQuery, bodyData, keyId, apiSecret) {
+function toDeterministicUuid(seed) {
+  const str = String(seed || '').trim();
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str)) {
+    return str.toLowerCase();
+  }
+  const hash = crypto.createHash('sha256').update(str || crypto.randomUUID()).digest('hex');
+  return [
+    hash.substring(0, 8),
+    hash.substring(8, 12),
+    '4' + hash.substring(13, 16),
+    'a' + hash.substring(17, 20),
+    hash.substring(20, 32)
+  ].join('-');
+}
+
+function signRequest(method, pathWithQuery, bodyData, keyId, apiSecret, idempotencySeed = null) {
   const nowUtc = new Date().toISOString().split('.')[0] + 'Z';
   const nonce = crypto.randomBytes(16).toString('hex');
   const rawBody = bodyData ? (typeof bodyData === 'string' ? bodyData : JSON.stringify(bodyData)) : '';
   const bodyHash = crypto.createHash('sha256').update(rawBody).digest('hex').toLowerCase();
 
-  const canonical = [method.toUpperCase(), pathWithQuery, nowUtc, nonce, bodyHash].join('\n');
+  const upperMethod = method.toUpperCase();
+  const canonical = [upperMethod, pathWithQuery, nowUtc, nonce, bodyHash].join('\n');
   const signature = crypto.createHmac('sha256', apiSecret).update(canonical).digest('hex').toLowerCase();
 
+  const headers = {
+    'Accept': 'application/json',
+    'Content-Type': 'application/json',
+    'X-Seller-Key': keyId,
+    'X-Seller-Timestamp': nowUtc,
+    'X-Seller-Nonce': nonce,
+    'X-Seller-Signature': `sha256=${signature}`,
+    'X-Request-ID': `gw_ord_${Date.now()}`
+  };
+
+  if (upperMethod === 'POST' || upperMethod === 'PUT' || upperMethod === 'PATCH') {
+    headers['Idempotency-Key'] = idempotencySeed ? toDeterministicUuid(idempotencySeed) : crypto.randomUUID();
+  }
+
   return {
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-      'X-Seller-Key': keyId,
-      'X-Seller-Timestamp': nowUtc,
-      'X-Seller-Nonce': nonce,
-      'X-Seller-Signature': `sha256=${signature}`,
-      'X-Request-ID': `gw_ord_${Date.now()}`
-    },
+    headers,
     rawBody
   };
 }
@@ -471,8 +493,7 @@ export default async function handler(req, res) {
     };
 
     // 5. إرسال الطلب لمزود الخدمة Digital Vault
-    const signed = signRequest('POST', '/api/seller/v1/orders', orderPayload, KEY_ID, API_SECRET);
-    signed.headers['Idempotency-Key'] = externalId;
+    const signed = signRequest('POST', '/api/seller/v1/orders', orderPayload, KEY_ID, API_SECRET, externalId);
 
     const providerRes = await fetch(`${BASE_URL}/orders`, {
       method: 'POST',
@@ -493,7 +514,6 @@ export default async function handler(req, res) {
     if (sellerOrder.fulfillment_status === 'ready') {
       try {
         const tokenSign = signRequest('POST', `/api/seller/v1/orders/${sellerOrder.id}/delivery-access`, {}, KEY_ID, API_SECRET);
-        tokenSign.headers['Idempotency-Key'] = `tok_${sellerOrder.id}_${Date.now()}`;
         const tokRes = await fetch(`${BASE_URL}/orders/${sellerOrder.id}/delivery-access`, {
           method: 'POST',
           headers: tokenSign.headers,
