@@ -48,6 +48,7 @@ class BasGatePaymentService {
               BaseOptions(
                 connectTimeout: const Duration(seconds: 30),
                 receiveTimeout: const Duration(seconds: 30),
+                validateStatus: (status) => status != null && status < 500,
                 headers: {
                   'Content-Type': 'application/json',
                   'Accept': 'application/json',
@@ -206,12 +207,19 @@ class BasGatePaymentService {
       );
     } catch (e) {
       debugPrint('[BasGate] Exception during payment: $e');
+      String friendlyMsg = 'حدث خطأ أثناء الاتصال ببوابة الدفع، يرجى التحقق من اتصال الإنترنت والمحاولة مجدداً.';
+      if (e is DioException) {
+        final data = e.response?.data;
+        if (data is Map && data['error'] != null) {
+          friendlyMsg = data['error'].toString();
+        }
+      }
       return BasGatePaymentResult(
         isSuccess: false,
         paymentId: createdPaymentId,
         orderId: orderId,
         trxToken: trxToken,
-        message: 'حدث خطأ أثناء الاتصال ببوابة الدفع: ${e.toString()}',
+        message: friendlyMsg,
       );
     }
   }

@@ -412,6 +412,7 @@ class OrderRepository implements IOrderRepository {
         'p_account_number': user.accountNumber,
         'p_phone_national': user.phoneNational,
         'p_user_id': user.id,
+        'p_session_token': user.sessionToken,
       });
 
       final list = (res as List).map((json) => OrderModel.fromJson(Map<String, dynamic>.from(json as Map))).toList();

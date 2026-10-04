@@ -13,6 +13,7 @@ import { DigitalVaultService } from './services/digitalVaultService';
 export function App() {
   const [session, setSession] = useState(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const isAdmin = session?.user?.app_metadata?.role === 'admin';
 
   const [activeTab, setActiveTab] = useState('dashboard');
   const [orders, setOrders] = useState([]);
@@ -153,7 +154,7 @@ export function App() {
   };
 
   useEffect(() => {
-    if (!session) return;
+    if (!isAdmin) return;
 
     handleRefreshAll();
 
@@ -179,7 +180,7 @@ export function App() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [session]);
+  }, [isAdmin]);
 
   if (isAuthLoading) {
     return (
@@ -194,6 +195,21 @@ export function App() {
 
   if (!session) {
     return <LoginPage onLoginSuccess={() => {}} />;
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-4 text-white" dir="rtl">
+        <p className="text-sm text-slate-300">هذا الحساب غير مخول للوصول إلى لوحة الإدارة.</p>
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold hover:bg-blue-700"
+        >
+          تسجيل الخروج
+        </button>
+      </div>
+    );
   }
 
   const pendingCount = orders.filter(

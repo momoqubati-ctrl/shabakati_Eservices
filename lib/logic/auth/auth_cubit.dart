@@ -224,6 +224,7 @@ class AuthCubit extends Cubit<AuthState> {
     await authRepository.updateBiometricStatus(
       accountNumber: user.accountNumber,
       enabled: true,
+      sessionToken: user.sessionToken,
     );
     currentUser = user.copyWith(biometricEnabled: true);
     await secureStorageService.saveActiveUser(currentUser!);
@@ -236,6 +237,7 @@ class AuthCubit extends Cubit<AuthState> {
       await authRepository.updateBiometricStatus(
         accountNumber: currentUser!.accountNumber,
         enabled: false,
+        sessionToken: currentUser!.sessionToken,
       );
       currentUser = currentUser!.copyWith(biometricEnabled: false);
       await secureStorageService.saveActiveUser(currentUser!);

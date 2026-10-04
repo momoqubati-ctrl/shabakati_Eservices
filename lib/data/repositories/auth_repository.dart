@@ -25,6 +25,7 @@ abstract class IAuthRepository {
   Future<void> updateBiometricStatus({
     required String accountNumber,
     required bool enabled,
+    String? sessionToken,
   });
 
   Future<void> changePassword({
@@ -88,6 +89,12 @@ class AuthRepository implements IAuthRepository {
 
     if (data['error'] == 'ACCOUNT_ALREADY_VERIFIED') {
       throw Exception('رقم الحساب مسجل ومفعل مسبقاً. يرجى تسجيل الدخول مباشرة.');
+    }
+    if (data['error'] == 'REGISTRATION_PENDING_VERIFICATION') {
+      throw Exception('يوجد طلب تسجيل قيد التحقق لهذا الرقم، يرجى الانتظار دقائق أو إدخال رمز التحقق المرسل.');
+    }
+    if (data['error'] == 'ACCOUNT_LOCKED') {
+      throw Exception('تم قفل المحاولات مؤقتاً لمدة 15 دقيقة، يرجى المحاولة لاحقاً.');
     }
 
     return UserAccountModel.fromJson(data);
@@ -156,10 +163,12 @@ class AuthRepository implements IAuthRepository {
   Future<void> updateBiometricStatus({
     required String accountNumber,
     required bool enabled,
+    String? sessionToken,
   }) async {
     await _supabase.rpc('rpc_update_biometric', params: {
       'p_account_number': accountNumber,
       'p_enabled': enabled,
+      'p_session_token': sessionToken,
     });
   }
 

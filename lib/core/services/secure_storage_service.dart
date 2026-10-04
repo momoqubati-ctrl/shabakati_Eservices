@@ -40,6 +40,7 @@ class SecureStorageService {
       'is_verified': user.isVerified,
       'biometric_enabled': user.biometricEnabled,
       'created_at': user.createdAt.toIso8601String(),
+      if (user.sessionToken != null) 'session_token': user.sessionToken,
     });
     await _storage.write(key: _keyActiveUser, value: jsonStr);
     await extendSession();

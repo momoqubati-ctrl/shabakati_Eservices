@@ -1,47 +1,11 @@
 import crypto from 'crypto';
+import { verifyAdminAuth } from './_lib/adminAuth.js';
+import { calculateExpectedTotalYer, isExactPaidAmount } from './_lib/orderPricing.js';
+import { getServerSecrets } from './_lib/serverSecrets.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://enutfwspwrzpvhmtgftl.supabase.co';
 const SUPABASE_ANON = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVudXRmd3Nwd3J6cHZobXRnZnRsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxODE3ODQsImV4cCI6MjEwNTc1Nzc4NH0.dRgwtfHV1OYWxeFKDon030mwesEIx_993cOQiAABTRs';
 
-async function getServerSecrets() {
-  if (globalThis.__shabaktiSecretsCache) return globalThis.__shabaktiSecretsCache;
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/rpc_get_backend_secrets`, {
-      method: 'POST',
-      headers: {
-        'apikey': SUPABASE_ANON,
-        'Authorization': `Bearer ${SUPABASE_ANON}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ p_handshake: process.env.SERVER_HANDSHAKE_KEY || 'shabakti_srv_vault_handshake_2026_v1' })
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data && typeof data === 'object') {
-        globalThis.__shabaktiSecretsCache = data;
-        return data;
-      }
-    }
-  } catch (_) {}
-  return {};
-}
-
-async function verifyAdminAuth(req) {
-  const authHeader = req.headers.authorization || '';
-  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-  if (!token) return false;
-  try {
-    const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-      headers: {
-        'apikey': SUPABASE_ANON,
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    return userRes.ok;
-  } catch (_) {
-    return false;
-  }
-}
 
 function signRequest(method, pathWithQuery, bodyData, keyId, apiSecret) {
   const nowUtc = new Date().toISOString().split('.')[0] + 'Z';
@@ -77,8 +41,8 @@ export default async function handler(req, res) {
 
   const secrets = await getServerSecrets();
   const BASE_URL = process.env.DIGITAL_VAULT_BASE_URL || process.env.VITE_DIGITAL_VAULT_BASE_URL || secrets.DIGITAL_VAULT_BASE_URL || 'https://sahalnahaa.cloud/api/seller/v1';
-  const KEY_ID = process.env.DIGITAL_VAULT_KEY_ID || process.env.VITE_DIGITAL_VAULT_KEY_ID || secrets.DIGITAL_VAULT_KEY_ID;
-  const API_SECRET = process.env.DIGITAL_VAULT_API_SECRET || process.env.VITE_DIGITAL_VAULT_API_SECRET || secrets.DIGITAL_VAULT_API_SECRET;
+  const KEY_ID = process.env.DIGITAL_VAULT_KEY_ID || secrets.DIGITAL_VAULT_KEY_ID;
+  const API_SECRET = process.env.DIGITAL_VAULT_API_SECRET || secrets.DIGITAL_VAULT_API_SECRET;
   const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!KEY_ID || !API_SECRET || !SUPABASE_KEY) {
@@ -90,7 +54,7 @@ export default async function handler(req, res) {
   // =========================================================================
   if (req.method === 'GET') {
     const { seller_order_id, external_order_id, action, limit = '20' } = req.query || {};
-    const isAdmin = await verifyAdminAuth(req);
+    const isAdmin = await verifyAdminAuth(req, SUPABASE_ANON);
 
     if (action === 'list') {
       if (!isAdmin) {
@@ -203,7 +167,7 @@ export default async function handler(req, res) {
   // 2. معالجة طلبات التعديل الإداري (PATCH / action === 'update') - للأدمن حصرياً
   // =========================================================================
   if (req.method === 'PATCH' || (req.method === 'POST' && req.body?.action === 'update')) {
-    const isAdmin = await verifyAdminAuth(req);
+    const isAdmin = await verifyAdminAuth(req, SUPABASE_ANON);
     if (!isAdmin) {
       return res.status(401).json({ success: false, error: 'غير مصرح لك بتعديل بيانات الطلبات (يتطلب صلاحية الأدمن)' });
     }
@@ -257,7 +221,7 @@ export default async function handler(req, res) {
   // 3. معالجة طلب إلغاء العملية لدى المزود (للأدمن حصرياً)
   // =========================================================================
   if (req.body?.action === 'cancel') {
-    const isAdmin = await verifyAdminAuth(req);
+    const isAdmin = await verifyAdminAuth(req, SUPABASE_ANON);
     if (!isAdmin) {
       return res.status(401).json({ success: false, error: 'غير مصرح لك بإلغاء الطلبات' });
     }
@@ -336,67 +300,15 @@ export default async function handler(req, res) {
       }
 
       // ب) مطابقة المبلغ المدفوع (payment.amount) والعملة مع إجمالي أسعار وكميات المنتجات المطلوبة
-      const [settingsRes, prodSettingsRes, cachedProdsRes] = await Promise.all([
-        fetch(`${SUPABASE_URL}/rest/v1/app_settings?id=eq.general_settings&select=usd_to_yer_rate`, {
-          headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
-        }),
-        fetch(`${SUPABASE_URL}/rest/v1/product_settings?select=product_id,custom_price_yer,is_active`, {
-          headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
-        }),
-        fetch(`${SUPABASE_URL}/rest/v1/cached_products?select=id,price_cents`, {
-          headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
-        })
-      ]);
-
-      const settingsRows = settingsRes.ok ? await settingsRes.json() : [];
-      const exchangeRate = Number(settingsRows?.[0]?.usd_to_yer_rate) || 535;
-
-      const prodSettingsList = prodSettingsRes.ok ? await prodSettingsRes.json() : [];
-      const customPricesMap = {};
-      if (Array.isArray(prodSettingsList)) {
-        prodSettingsList.forEach(ps => {
-          customPricesMap[Number(ps.product_id)] = ps;
-        });
-      }
-
-      const cachedProdsList = cachedProdsRes.ok ? await cachedProdsRes.json() : [];
-      const cachedPriceCentsMap = {};
-      if (Array.isArray(cachedProdsList)) {
-        cachedProdsList.forEach(cp => {
-          cachedPriceCentsMap[Number(cp.id)] = Number(cp.price_cents) || 0;
-        });
-      }
-
-      let expectedTotalYer = 0;
-      for (const item of items) {
-        const pid = Number(item.product_id || item.product?.id);
-        const qty = Number(item.quantity || 1);
-        const ps = customPricesMap[pid];
-
-        if (ps && ps.is_active === false) {
-          return res.status(400).json({ success: false, error: 'أحد المنتجات المطلوبة غير متاح حالياً' });
-        }
-
-        let unitPriceYer = 0;
-        if (ps && ps.custom_price_yer && Number(ps.custom_price_yer) > 0) {
-          unitPriceYer = Number(ps.custom_price_yer);
-        } else {
-          const baseCents = Math.max(
-            cachedPriceCentsMap[pid] || 0,
-            Number(item.unit_price_cents) || 0
-          );
-          if (baseCents > 0) {
-            const costYer = (baseCents / 100) * exchangeRate;
-            unitPriceYer = Math.ceil((costYer + 1000) / 1000) * 1000;
-          }
-        }
-        expectedTotalYer += unitPriceYer * qty;
-      }
+      const expectedTotalYer = await calculateExpectedTotalYer(items, SUPABASE_KEY);
 
       const paidAmountYer = Number(paymentRow.amount) || 0;
       const paidCurrency = String(paymentRow.currency || 'YER').toUpperCase();
 
-      if (paidCurrency !== 'YER' || paidAmountYer <= 0 || (expectedTotalYer > 0 && paidAmountYer < expectedTotalYer * 0.95)) {
+      if (
+        paidCurrency !== 'YER' ||
+        !isExactPaidAmount(paidAmountYer, expectedTotalYer)
+      ) {
         return res.status(403).json({
           success: false,
           error: 'المبلغ المسدد لا يطابق إجمالي أسعار وكميات المنتجات المطلوبة'
@@ -519,7 +431,7 @@ export default async function handler(req, res) {
       }
     } else if (external_order_id) {
       // إعادة تنفيذ طلب معلق من لوحة الأدمن — يتطلب توكن أدمن موثق وأن يكون الطلب موجوداً مسبقاً
-      const isAdmin = await verifyAdminAuth(req);
+      const isAdmin = await verifyAdminAuth(req, SUPABASE_ANON);
       if (!isAdmin) {
         return res.status(401).json({
           success: false,

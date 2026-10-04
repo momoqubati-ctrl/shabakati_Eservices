@@ -8,6 +8,7 @@ class UserAccountModel {
   final bool isVerified;
   final bool biometricEnabled;
   final DateTime createdAt;
+  final String? sessionToken;
 
   UserAccountModel({
     this.id,
@@ -19,6 +20,7 @@ class UserAccountModel {
     this.isVerified = false,
     this.biometricEnabled = false,
     required this.createdAt,
+    this.sessionToken,
   });
 
   String get regionName => region == 'A' ? 'صنعاء' : (region == 'B' ? 'عدن' : region);
@@ -34,6 +36,7 @@ class UserAccountModel {
       isVerified: json['is_verified'] ?? false,
       biometricEnabled: json['biometric_enabled'] ?? false,
       createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']) : DateTime.now(),
+      sessionToken: json['session_token']?.toString(),
     );
   }
 
@@ -46,6 +49,7 @@ class UserAccountModel {
       'region': region,
       'is_verified': isVerified,
       'biometric_enabled': biometricEnabled,
+      if (sessionToken != null) 'session_token': sessionToken,
     };
   }
 
@@ -59,6 +63,7 @@ class UserAccountModel {
     bool? isVerified,
     bool? biometricEnabled,
     DateTime? createdAt,
+    String? sessionToken,
   }) {
     return UserAccountModel(
       id: id ?? this.id,
@@ -70,6 +75,7 @@ class UserAccountModel {
       isVerified: isVerified ?? this.isVerified,
       biometricEnabled: biometricEnabled ?? this.biometricEnabled,
       createdAt: createdAt ?? this.createdAt,
+      sessionToken: sessionToken ?? this.sessionToken,
     );
   }
 }
