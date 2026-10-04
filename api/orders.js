@@ -75,8 +75,58 @@ export default async function handler(req, res) {
   // 1. معالجة طلبات GET (قائمة الطلبات للأدمن / فحص حالة طلب / استهلاك الكود)
   // =========================================================================
   if (req.method === 'GET') {
-    const { seller_order_id, external_order_id, action, limit = '20' } = req.query || {};
+    const { seller_order_id, external_order_id, action, limit = '20', user_id, account_number, phone_national } = req.query || {};
     const isAdmin = await verifyAdminAuth(req, SUPABASE_ANON);
+
+    if (action === 'user_orders') {
+      if (!user_id || !account_number) {
+        return res.status(400).json({ success: false, error: 'بيانات المستخدم مطلوبة' });
+      }
+      try {
+        const userVerifyRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/app_users?id=eq.${encodeURIComponent(user_id)}&account_number=eq.${encodeURIComponent(account_number)}&select=id,account_number,phone_national,session_token`,
+          {
+            headers: {
+              'apikey': SUPABASE_KEY,
+              'Authorization': `Bearer ${SUPABASE_KEY}`
+            }
+          }
+        );
+        const userRows = userVerifyRes.ok ? await userVerifyRes.json() : [];
+        if (!Array.isArray(userRows) || userRows.length === 0) {
+          return res.status(403).json({ success: false, error: 'غير مصرح بالوصول إلى طلبات هذا الحساب' });
+        }
+        const verifiedUser = userRows[0];
+        const acc = verifiedUser.account_number;
+        const nat = verifiedUser.phone_national || phone_national || '';
+        const orParts = [
+          `user_id.eq.${verifiedUser.id}`,
+          `account_number.eq.${encodeURIComponent(acc)}`,
+          `contact_phone.eq.${encodeURIComponent(acc)}`
+        ];
+        if (nat) {
+          orParts.push(`account_number.eq.${encodeURIComponent(nat)}`);
+          orParts.push(`contact_phone.eq.${encodeURIComponent(nat)}`);
+        }
+        const ordersRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/orders?or=(${orParts.join(',')})&order=created_at.desc`,
+          {
+            headers: {
+              'apikey': SUPABASE_KEY,
+              'Authorization': `Bearer ${SUPABASE_KEY}`
+            }
+          }
+        );
+        const ordersData = ordersRes.ok ? await ordersRes.json() : [];
+        return res.status(200).json({
+          success: true,
+          data: Array.isArray(ordersData) ? ordersData : [],
+          session_token: verifiedUser.session_token || null
+        });
+      } catch (err) {
+        return res.status(500).json({ success: false, error: 'تعذر جلب قائمة طلبات المستخدم' });
+      }
+    }
 
     if (action === 'list') {
       if (!isAdmin) {

@@ -392,22 +392,50 @@ class OrderRepository implements IOrderRepository {
 
   @override
   Future<List<OrderModel>> getOrdersForUser(UserAccountModel user) async {
-    if (supabaseClient == null) return [];
-    try {
-      final res = await supabaseClient!.rpc('rpc_get_user_orders', params: {
-        'p_account_number': user.accountNumber,
-        'p_phone_national': user.phoneNational,
-        'p_user_id': user.id,
-        'p_session_token': user.sessionToken,
-      });
-
-      final list = (res as List).map((json) => OrderModel.fromJson(Map<String, dynamic>.from(json as Map))).toList();
-      final userOrders = list.where((o) => o.matchesUser(user)).toList();
-      return await _mergeDeliveredAssets(userOrders);
-    } catch (e) {
-      debugPrint('[OrderRepo] getOrdersForUser error: $e');
-      return [];
+    String? token = user.sessionToken;
+    if ((token == null || token.isEmpty) && secureStorageService != null) {
+      final saved = await secureStorageService!.getActiveUser();
+      if (saved != null && saved.accountNumber == user.accountNumber) {
+        token = saved.sessionToken;
+      }
     }
+
+    if (supabaseClient != null && token != null && token.isNotEmpty) {
+      try {
+        final res = await supabaseClient!.rpc('rpc_get_user_orders', params: {
+          'p_account_number': user.accountNumber,
+          'p_phone_national': user.phoneNational,
+          'p_user_id': user.id,
+          'p_session_token': token,
+        });
+
+        final list = (res as List).map((json) => OrderModel.fromJson(Map<String, dynamic>.from(json as Map))).toList();
+        final userOrders = list.where((o) => o.matchesUser(user)).toList();
+        return await _mergeDeliveredAssets(userOrders);
+      } catch (e) {
+        debugPrint('[OrderRepo] rpc_get_user_orders error, trying gateway fallback: $e');
+      }
+    }
+
+    try {
+      final gwUrl =
+          '${ApiConfig.vercelBackendUrl}/api/orders?action=user_orders&user_id=${user.id ?? ''}&account_number=${Uri.encodeComponent(user.accountNumber)}&phone_national=${Uri.encodeComponent(user.phoneNational)}';
+      final gwRes = await _gatewayDio.get(gwUrl);
+      if (gwRes.statusCode == 200 && gwRes.data is Map) {
+        final newToken = gwRes.data['session_token']?.toString();
+        if (newToken != null && newToken.isNotEmpty && secureStorageService != null) {
+          await secureStorageService!.saveActiveUser(user.copyWith(sessionToken: newToken));
+        }
+        final rawList = gwRes.data['data'] as List? ?? [];
+        final list = rawList.map((json) => OrderModel.fromJson(Map<String, dynamic>.from(json as Map))).toList();
+        final userOrders = list.where((o) => o.matchesUser(user)).toList();
+        return await _mergeDeliveredAssets(userOrders);
+      }
+    } catch (e) {
+      debugPrint('[OrderRepo] gateway user_orders error: $e');
+    }
+
+    return [];
   }
 
   @override
