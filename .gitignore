@@ -48,4 +48,8 @@ app.*.map.json
 .env
 .env.local
 .env.*.local
+admin_dashboard/.env.production
 !.env.example
+android/key.properties
+**/*.jks
+**/*.keystore
