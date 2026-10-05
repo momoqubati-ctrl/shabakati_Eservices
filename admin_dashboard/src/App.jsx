@@ -98,6 +98,18 @@ export function App() {
                 ? 1500
                 : Math.round(((o.total_cents || 0) / 100) * (exchangeRate || 535));
 
+          const knownDvBotCodes = {
+            11: 'ORD-MLRX0MBV0R',
+            4: 'ORD-UYAGV29QYP',
+            3: 'ORD-OWYF6E5WCG',
+            2: 'ORD-KEOPRPBJA1',
+          };
+          const dvBotCode =
+            o.provider_order_code ||
+            o.dv_order_code ||
+            (o.seller_order_id && knownDvBotCodes[o.seller_order_id]) ||
+            null;
+
           const enriched = {
             ...o,
             payment_id: o.payment_id || matchedPayment?.id || null,
@@ -112,7 +124,8 @@ export function App() {
             paid_amount_yer: rawAmountYer,
             gateway_order_id: matchedPayment?.external_order_id || o.external_order_id || null,
             gateway_raw_order_id: matchedPayment?.external_order_id || null,
-            digital_vault_ref: o.seller_order_id ? `#${o.seller_order_id}` : null,
+            digital_vault_ref: dvBotCode ? `#${dvBotCode}` : (o.seller_order_id ? `#${o.seller_order_id}` : null),
+            digital_vault_bot_code: dvBotCode,
           };
 
           const key = enriched.id || enriched.external_order_id;

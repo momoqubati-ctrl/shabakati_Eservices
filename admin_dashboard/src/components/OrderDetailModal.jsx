@@ -654,7 +654,9 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
             <div>
               <span className="text-slate-500 block">مرجع مزود Digital Vault:</span>
               <span className="font-mono text-purple-600 dark:text-purple-400 font-bold">
-                {currentOrder.seller_order_id ? `#${currentOrder.seller_order_id} (${currentOrder.external_order_id})` : 'غير منفذ بعد'}
+                {currentOrder.seller_order_id
+                  ? `${currentOrder.digital_vault_bot_code ? `#${currentOrder.digital_vault_bot_code} • ` : ''}API #${currentOrder.seller_order_id}`
+                  : 'غير منفذ بعد'}
               </span>
             </div>
           </div>
@@ -786,13 +788,15 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
                 {currentOrder.seller_order_id ? (
                   <div className="flex items-center gap-1.5">
                     <span className="font-mono font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded-md text-[11px] select-all">
-                      #{currentOrder.seller_order_id} — {currentOrder.external_order_id}
+                      {currentOrder.digital_vault_bot_code
+                        ? `#${currentOrder.digital_vault_bot_code} (API #${currentOrder.seller_order_id} • ${currentOrder.external_order_id})`
+                        : `#${currentOrder.seller_order_id} — ${currentOrder.external_order_id}`}
                     </span>
                     <button
                       type="button"
-                      onClick={() => handleCopy(`${currentOrder.seller_order_id}`)}
+                      onClick={() => handleCopy(currentOrder.digital_vault_bot_code || `${currentOrder.seller_order_id}`)}
                       className="p-1 text-slate-400 hover:text-purple-500 rounded transition-colors"
-                      title="نسخ رقم طلب المزود"
+                      title="نسخ مرجع طلب المزود"
                     >
                       <Copy className="w-3.5 h-3.5" />
                     </button>

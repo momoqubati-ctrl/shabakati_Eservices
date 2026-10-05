@@ -240,9 +240,11 @@ export const DashboardOverview = ({
                       {order.seller_order_id ? (
                         <div className="space-y-0.5">
                           <span className="font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded-md inline-block text-[11px]">
-                            #{order.seller_order_id}
+                            {order.digital_vault_bot_code ? `#${order.digital_vault_bot_code}` : `#${order.seller_order_id}`}
                           </span>
-                          <span className="block text-[10px] text-slate-400">{order.external_order_id}</span>
+                          <span className="block text-[10px] text-slate-400">
+                            API #{order.seller_order_id} • {order.external_order_id}
+                          </span>
                         </div>
                       ) : (
                         <span className="text-amber-600 dark:text-amber-400 text-[11px]">غير منفذ</span>
