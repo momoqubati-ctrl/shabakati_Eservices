@@ -85,8 +85,8 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
               payment_method: prev.payment_method || 'المحافظ الإلكترونية',
               wallet_name: prev.wallet_name || p.wallet_name || null,
               paid_amount_yer: prev.paid_amount_yer || (p.amount ? Number(p.amount) : null),
-              gateway_order_id: prev.gateway_order_id || prev.external_order_id || p.external_order_id || null,
-              gateway_raw_order_id: prev.gateway_raw_order_id || p.external_order_id || null,
+              gateway_order_id: p.external_order_id || prev.gateway_order_id || prev.external_order_id || null,
+              gateway_raw_order_id: p.external_order_id || prev.gateway_raw_order_id || null,
             }));
           }
         } catch (_) {}

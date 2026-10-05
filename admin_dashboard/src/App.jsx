@@ -110,7 +110,7 @@ export function App() {
             payment_method: o.payment_method || 'المحافظ الإلكترونية',
             wallet_name: o.wallet_name || matchedPayment?.wallet_name || null,
             paid_amount_yer: rawAmountYer,
-            gateway_order_id: o.external_order_id || matchedPayment?.external_order_id || null,
+            gateway_order_id: matchedPayment?.external_order_id || o.external_order_id || null,
             gateway_raw_order_id: matchedPayment?.external_order_id || null,
             digital_vault_ref: o.seller_order_id ? `#${o.seller_order_id}` : null,
           };

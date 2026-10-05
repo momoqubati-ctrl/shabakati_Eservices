@@ -72,7 +72,7 @@ class OrderRepository implements IOrderRepository {
         (externalOrderId != null && externalOrderId.trim().isNotEmpty)
             ? externalOrderId.trim()
             : 'ord_${_uuid.v4().substring(0, 12)}';
-    final effectiveOrderId = resolvedExternalOrderId.startsWith('ord_')
+    String effectiveOrderId = resolvedExternalOrderId.startsWith('ord_')
         ? resolvedExternalOrderId
         : 'ord_$resolvedExternalOrderId';
 
@@ -115,6 +115,9 @@ class OrderRepository implements IOrderRepository {
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = response.data['data'] as Map<String, dynamic>;
+        if (data['external_order_id'] != null && data['external_order_id'].toString().isNotEmpty) {
+          effectiveOrderId = data['external_order_id'].toString();
+        }
         sellerOrderId = data['id'];
         fulfillmentStatus = data['fulfillment_status'] ?? 'processing';
         orderStatus = data['status'] ?? 'paid';

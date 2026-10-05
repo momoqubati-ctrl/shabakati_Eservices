@@ -322,7 +322,7 @@ export default async function handler(req, res) {
   // =========================================================================
   try {
     const { items, external_order_id, device_id, telegram_user, contact_phone, contact_email, payment_id, payment_reference, payment_method, wallet_name, user_id, account_number } = req.body || {};
-    const externalId = external_order_id || `ord_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    let externalId = external_order_id || `ord_${crypto.randomUUID().substring(0, 12)}`;
 
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ success: false, error: 'قائمة عناصر الطلب مطلوبة' });
@@ -361,6 +361,12 @@ export default async function handler(req, res) {
       }
 
       const paymentRow = pRows[0];
+      // توحيد رقم الطلب في شبكتي وDigital Vault مع رقم الطلب المرسل لبوابة الدفع (إذا كان بصيغة ord_)
+      if (paymentRow.metadata?.consumed_by_order) {
+        externalId = String(paymentRow.metadata.consumed_by_order);
+      } else if (paymentRow.external_order_id && String(paymentRow.external_order_id).startsWith('ord_')) {
+        externalId = String(paymentRow.external_order_id);
+      }
       const isAlreadyConsumedBySameOrder =
         paymentRow.status === 'consumed' && paymentRow.metadata?.consumed_by_order === externalId;
 
