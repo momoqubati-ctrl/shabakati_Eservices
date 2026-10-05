@@ -9,6 +9,7 @@ import '../../logic/auth/auth_state.dart';
 import '../../logic/cart/cart_cubit.dart';
 import '../../logic/orders/orders_cubit.dart';
 import 'auth/login_page.dart';
+import 'onboarding_splash_page.dart';
 import 'privacy_policy_page.dart';
 
 class AccountProfilePage extends StatefulWidget {
@@ -602,7 +603,13 @@ class _AccountProfilePageState extends State<AccountProfilePage> {
             ),
           ],
         ),
-        body: BlocBuilder<AuthCubit, AuthState>(
+        body: BlocConsumer<AuthCubit, AuthState>(
+          listener: (context, state) {
+            if (state is AuthSuccess) {
+              _checkBiometrics();
+              _loadSessionInfo();
+            }
+          },
           builder: (context, state) {
             final cubit = context.read<AuthCubit>();
             final user = cubit.currentUser;
@@ -819,6 +826,26 @@ class _AccountProfilePageState extends State<AccountProfilePage> {
                   ),
                   child: Column(
                     children: [
+                      ListTile(
+                        leading: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF2563EB).withAlpha(25),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.auto_awesome, color: Color(0xFF2563EB), size: 22),
+                        ),
+                        title: const Text('دليل ومميزات بوابة شبكتي (السبلاش)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        subtitle: const Text('الاشتراكات، الدفع المباشر، والتسليم الفوري', style: TextStyle(fontSize: 11)),
+                        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const OnboardingSplashPage(isReviewMode: true)),
+                          );
+                        },
+                      ),
+                      const Divider(height: 1, indent: 16, endIndent: 16),
                       ListTile(
                         leading: Container(
                           padding: const EdgeInsets.all(8),

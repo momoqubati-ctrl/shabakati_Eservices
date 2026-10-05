@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/services/whatsapp_launcher.dart';
+import '../../data/models/user_account_model.dart';
 import '../../logic/auth/auth_cubit.dart';
 import '../../logic/auth/auth_state.dart';
 import '../../logic/cart/cart_cubit.dart';
@@ -25,11 +26,130 @@ class _HomeNavigationPageState extends State<HomeNavigationPage> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final authState = context.read<AuthCubit>().state;
+      final cubit = context.read<AuthCubit>();
+      final authState = cubit.state;
       if (authState is AuthSuccess) {
         context.read<OrdersCubit>().loadOrdersForUser(authState.user);
+        if (authState.isFirstLogin && cubit.consumeFirstLoginBiometricPrompt()) {
+          _showEnableBiometricsDialog(authState.user);
+        }
       }
     });
+  }
+
+  Future<void> _showEnableBiometricsDialog(UserAccountModel user) async {
+    if (!mounted) return;
+    final cubit = context.read<AuthCubit>();
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    bool isActivating = false;
+    String? dialogError;
+
+    final enabled = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (dialogCtx, setDialogState) => Directionality(
+          textDirection: TextDirection.rtl,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(dialogCtx).colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(Icons.fingerprint_rounded, color: Theme.of(dialogCtx).colorScheme.primary),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text('تفعيل الدخول بالبصمة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'هل تريد تفعيل البصمة لتسهيل عملية الدخول في المرات القادمة بدون الحاجة لإدخال كلمة السر؟',
+                  style: TextStyle(fontSize: 13, height: 1.5),
+                ),
+                if (dialogError != null) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.red.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.error_outline_rounded, size: 16, color: Colors.red.shade700),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            dialogError!,
+                            style: TextStyle(fontSize: 11.5, color: Colors.red.shade800, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: isActivating ? null : () => Navigator.pop(dialogCtx, false),
+                child: Text('ليس الآن', style: TextStyle(color: Colors.grey.shade600)),
+              ),
+              FilledButton.icon(
+                icon: isActivating
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.fingerprint_rounded, size: 18),
+                label: const Text('حفظ وتفعيل'),
+                onPressed: isActivating
+                    ? null
+                    : () async {
+                        setDialogState(() {
+                          isActivating = true;
+                          dialogError = null;
+                        });
+                        final ok = await cubit.authenticateAndEnableBiometrics(
+                          user: user,
+                        );
+                        if (!dialogCtx.mounted) return;
+                        if (ok) {
+                          Navigator.pop(dialogCtx, true);
+                        } else {
+                          setDialogState(() {
+                            isActivating = false;
+                            dialogError = 'لم يتم التحقق من البصمة، يرجى مسح البصمة للمتابعة أو اختيار "ليس الآن"';
+                          });
+                        }
+                      },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (enabled == true) {
+      messenger?.showSnackBar(
+        const SnackBar(
+          content: Text('تم تفعيل الدخول بالبصمة بنجاح!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
   }
 
   @override
@@ -50,6 +170,10 @@ class _HomeNavigationPageState extends State<HomeNavigationPage> {
       listener: (context, authState) {
         if (authState is AuthSuccess) {
           context.read<OrdersCubit>().loadOrdersForUser(authState.user);
+          final cubit = context.read<AuthCubit>();
+          if (authState.isFirstLogin && cubit.consumeFirstLoginBiometricPrompt()) {
+            _showEnableBiometricsDialog(authState.user);
+          }
         } else if (authState is AuthInitial) {
           context.read<OrdersCubit>().clearOrders();
           context.read<CartCubit>().clearCart();

@@ -6,6 +6,7 @@ import '../../../data/models/user_account_model.dart';
 import '../../../logic/auth/auth_cubit.dart';
 import '../../../logic/auth/auth_state.dart';
 import '../../widgets/phone_input_field.dart';
+import '../onboarding_splash_page.dart';
 import '../privacy_policy_page.dart';
 import 'register_page.dart';
 
@@ -127,48 +128,115 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _showEnableBiometricsDialog(UserAccountModel user, String pin) async {
-    final enable = await showDialog<bool>(
+    final cubit = context.read<AuthCubit>();
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    bool isActivating = false;
+    String? dialogError;
+
+    final enabled = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(Icons.fingerprint_rounded, color: Theme.of(context).colorScheme.primary),
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (dialogCtx, setDialogState) => Directionality(
+          textDirection: TextDirection.rtl,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(dialogCtx).colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(Icons.fingerprint_rounded, color: Theme.of(dialogCtx).colorScheme.primary),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text('تفعيل الدخول بالبصمة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                ),
+              ],
             ),
-            const SizedBox(width: 12),
-            const Text('تفعيل الدخول بالبصمة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          ],
-        ),
-        content: const Text(
-          'هل تريد تفعيل البصمة لتسهيل عملية الدخول في المرات القادمة بدون الحاجة لإدخال كلمة السر؟',
-          style: TextStyle(fontSize: 13, height: 1.5),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('ليس الآن', style: TextStyle(color: Colors.grey.shade600)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'هل تريد تفعيل البصمة لتسهيل عملية الدخول في المرات القادمة بدون الحاجة لإدخال كلمة السر؟',
+                  style: TextStyle(fontSize: 13, height: 1.5),
+                ),
+                if (dialogError != null) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.red.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.error_outline_rounded, size: 16, color: Colors.red.shade700),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            dialogError!,
+                            style: TextStyle(fontSize: 11.5, color: Colors.red.shade800, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: isActivating ? null : () => Navigator.pop(dialogCtx, false),
+                child: Text('ليس الآن', style: TextStyle(color: Colors.grey.shade600)),
+              ),
+              FilledButton.icon(
+                icon: isActivating
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.fingerprint_rounded, size: 18),
+                label: const Text('حفظ وتفعيل'),
+                onPressed: isActivating
+                    ? null
+                    : () async {
+                        setDialogState(() {
+                          isActivating = true;
+                          dialogError = null;
+                        });
+                        final ok = await cubit.authenticateAndEnableBiometrics(
+                          user: user,
+                          pin4Digits: pin,
+                        );
+                        if (!dialogCtx.mounted) return;
+                        if (ok) {
+                          Navigator.pop(dialogCtx, true);
+                        } else {
+                          setDialogState(() {
+                            isActivating = false;
+                            dialogError = 'لم يتم التحقق من البصمة، يرجى مسح البصمة للمتابعة أو اختيار "ليس الآن"';
+                          });
+                        }
+                      },
+              ),
+            ],
           ),
-          FilledButton.icon(
-            icon: const Icon(Icons.check_rounded, size: 18),
-            label: const Text('حفظ وتفعيل'),
-            onPressed: () => Navigator.pop(context, true),
-          ),
-        ],
+        ),
       ),
     );
 
-    if (enable == true && mounted) {
-      await context.read<AuthCubit>().enableBiometrics(user: user, pin4Digits: pin);
-      if (!mounted) return;
-      setState(() => _hasBiometricEnabled = true);
-      ScaffoldMessenger.of(context).showSnackBar(
+    if (enabled == true) {
+      if (mounted) {
+        setState(() => _hasBiometricEnabled = true);
+      }
+      messenger?.showSnackBar(
         const SnackBar(
           content: Text('تم تفعيل الدخول بالبصمة بنجاح!'),
           backgroundColor: Colors.green,
@@ -633,30 +701,60 @@ class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final route = ModalRoute.of(context);
+    final isPushedRoute = route != null && !route.isFirst;
 
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        appBar: Navigator.canPop(context)
-            ? AppBar(
-                title: const Text('تسجيل الدخول', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                leading: IconButton(
+        appBar: AppBar(
+          title: isPushedRoute ? const Text('تسجيل الدخول', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)) : null,
+          leading: isPushedRoute && Navigator.canPop(context)
+              ? IconButton(
                   icon: const Icon(Icons.arrow_back_rounded),
                   onPressed: () => Navigator.pop(context),
+                )
+              : null,
+          actions: [
+            TextButton.icon(
+              icon: const Icon(Icons.auto_awesome, size: 16, color: Color(0xFF2563EB)),
+              label: const Text(
+                'عن التطبيق',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF2563EB),
                 ),
-              )
-            : null,
+              ),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const OnboardingSplashPage(isReviewMode: true),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(width: 8),
+          ],
+        ),
         body: BlocConsumer<AuthCubit, AuthState>(
           listener: (context, state) async {
             if (state is AuthSuccess) {
-              if (state.isFirstLogin && _pinController.text.isNotEmpty) {
-                await _showEnableBiometricsDialog(state.user, _pinController.text.trim());
+              final currentRoute = ModalRoute.of(context);
+              final isCurrent = currentRoute?.isCurrent ?? false;
+              final isPushed = currentRoute != null && !currentRoute.isFirst;
+
+              if (isPushed && isCurrent && state.isFirstLogin && _pinController.text.isNotEmpty) {
+                final cubit = context.read<AuthCubit>();
+                if (cubit.consumeFirstLoginBiometricPrompt()) {
+                  await _showEnableBiometricsDialog(state.user, _pinController.text.trim());
+                }
               }
               if (!context.mounted) return;
               if (widget.onLoginSuccess != null) {
                 widget.onLoginSuccess!();
               }
-              if (Navigator.canPop(context)) {
+              if (isPushed && isCurrent && Navigator.canPop(context)) {
                 Navigator.pop(context, true);
               }
             } else if (state is AuthSessionExpired) {
@@ -684,20 +782,28 @@ class _LoginPageState extends State<LoginPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      // شعار التطبيق
+                      // شعار التطبيق الرسمي
                       Container(
-                        width: 84,
-                        height: 84,
-                        padding: const EdgeInsets.all(16),
+                        width: 92,
+                        height: 92,
                         decoration: BoxDecoration(
-                          color: colorScheme.primary.withAlpha(20),
                           borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: colorScheme.primary.withAlpha(50)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: colorScheme.primary.withAlpha(35),
+                              blurRadius: 16,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
                         ),
-                        child: Icon(
-                          Icons.account_balance_wallet_rounded,
-                          size: 44,
-                          color: colorScheme.primary,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(24),
+                          child: Image.asset(
+                            'assets/icon/app_icon.png',
+                            width: 92,
+                            height: 92,
+                            fit: BoxFit.cover,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 20),
@@ -941,8 +1047,13 @@ class _LoginPageState extends State<LoginPage> {
                                     context,
                                     MaterialPageRoute(builder: (_) => const RegisterPage()),
                                   );
-                                  if (registered == true) {
+                                  if (registered == true && context.mounted) {
                                     _checkBiometrics();
+                                    widget.onLoginSuccess?.call();
+                                    final currentRoute = ModalRoute.of(context);
+                                    if (currentRoute != null && !currentRoute.isFirst && Navigator.canPop(context)) {
+                                      Navigator.pop(context, true);
+                                    }
                                   }
                                 },
                           child: RichText(

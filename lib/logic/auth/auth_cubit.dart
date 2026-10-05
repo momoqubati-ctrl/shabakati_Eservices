@@ -16,6 +16,8 @@ class AuthCubit extends Cubit<AuthState> {
   final SecureStorageService secureStorageService;
 
   UserAccountModel? currentUser;
+  String? _lastPin4Digits;
+  bool _hasPendingBiometricPrompt = false;
 
   AuthCubit({
     required this.authRepository,
@@ -27,6 +29,13 @@ class AuthCubit extends Cubit<AuthState> {
 
   /// هل المستخدم مسجل دخوله حالياً بحساب نشط وموثق؟
   bool get isAuthenticated => currentUser != null && state is AuthSuccess;
+
+  /// استهلاك طلب عرض نافذة تفعيل البصمة لأول مرة لمنع تكرارها أو ضياعها عند انتقال الشاشات
+  bool consumeFirstLoginBiometricPrompt() {
+    if (!_hasPendingBiometricPrompt) return false;
+    _hasPendingBiometricPrompt = false;
+    return true;
+  }
 
   /// استعادة جلسة المستخدم المحفوظة عند فتح التطبيق
   Future<void> restoreSavedSession() async {
@@ -90,6 +99,7 @@ class AuthCubit extends Cubit<AuthState> {
       );
 
       currentUser = user;
+      _lastPin4Digits = pin4Digits.trim();
       await secureStorageService.saveActiveUser(user);
 
       // فحص هل هذه أول مرة يدخل فيها بدون تفعيل البصمة
@@ -109,9 +119,12 @@ class AuthCubit extends Cubit<AuthState> {
         }
       }
 
+      final shouldPromptBiometric = !hasBiometric && canBiometric;
+      _hasPendingBiometricPrompt = shouldPromptBiometric;
+
       emit(AuthSuccess(
         user: user,
-        isFirstLogin: !hasBiometric && canBiometric,
+        isFirstLogin: shouldPromptBiometric,
       ));
     } catch (e) {
       emit(AuthError(e.toString().replaceAll('Exception: ', '')));
@@ -208,6 +221,29 @@ class AuthCubit extends Cubit<AuthState> {
     }
   }
 
+  /// طلب مسح البصمة الفعلي من الهاتف ثم حفظ وتفعيل الدخول بالبصمة
+  Future<bool> authenticateAndEnableBiometrics({
+    required UserAccountModel user,
+    String? pin4Digits,
+  }) async {
+    final effectivePin = (pin4Digits != null && pin4Digits.trim().isNotEmpty)
+        ? pin4Digits.trim()
+        : _lastPin4Digits;
+    if (effectivePin == null || effectivePin.isEmpty) {
+      return false;
+    }
+
+    final authenticated = await biometricService.authenticateWithBiometrics(
+      reason: 'امسح بصمتك لتفعيل الدخول السريع إلى حسابك',
+    );
+    if (!authenticated) {
+      return false;
+    }
+
+    await enableBiometrics(user: user, pin4Digits: effectivePin);
+    return true;
+  }
+
   /// حفظ وتفعيل خيار البصمة
   Future<void> enableBiometrics({
     required UserAccountModel user,
@@ -221,26 +257,36 @@ class AuthCubit extends Cubit<AuthState> {
       userName: user.fullName,
       region: user.region,
     );
-    await authRepository.updateBiometricStatus(
-      accountNumber: user.accountNumber,
-      enabled: true,
-      sessionToken: user.sessionToken,
-    );
+    try {
+      await authRepository.updateBiometricStatus(
+        accountNumber: user.accountNumber,
+        enabled: true,
+        sessionToken: user.sessionToken,
+      );
+    } catch (e) {
+      debugPrint('Notice: updateBiometricStatus server sync skipped: $e');
+    }
     currentUser = user.copyWith(biometricEnabled: true);
     await secureStorageService.saveActiveUser(currentUser!);
+    emit(AuthSuccess(user: currentUser!, isFirstLogin: false));
   }
 
   /// إلغاء تفعيل خيار البصمة ومسح بياناتها محلياً وفي السحابة
   Future<void> disableBiometrics() async {
     await biometricService.setBiometricEnabled(enabled: false);
     if (currentUser != null) {
-      await authRepository.updateBiometricStatus(
-        accountNumber: currentUser!.accountNumber,
-        enabled: false,
-        sessionToken: currentUser!.sessionToken,
-      );
+      try {
+        await authRepository.updateBiometricStatus(
+          accountNumber: currentUser!.accountNumber,
+          enabled: false,
+          sessionToken: currentUser!.sessionToken,
+        );
+      } catch (e) {
+        debugPrint('Notice: updateBiometricStatus server sync skipped: $e');
+      }
       currentUser = currentUser!.copyWith(biometricEnabled: false);
       await secureStorageService.saveActiveUser(currentUser!);
+      emit(AuthSuccess(user: currentUser!, isFirstLogin: false));
     }
   }
 
@@ -248,6 +294,8 @@ class AuthCubit extends Cubit<AuthState> {
   Future<void> switchUser() async {
     await secureStorageService.clearActiveUser();
     currentUser = null;
+    _lastPin4Digits = null;
+    _hasPendingBiometricPrompt = false;
     emit(AuthInitial());
   }
 
@@ -270,6 +318,7 @@ class AuthCubit extends Cubit<AuthState> {
       );
 
       currentUser = user;
+      _lastPin4Digits = pin4Digits.trim();
 
       // إرسال رمز OTP عبر الواتساب
       final sent = await otpService.sendOtp(
@@ -316,10 +365,14 @@ class AuthCubit extends Cubit<AuthState> {
       );
 
       if (isValid) {
-        currentUser = user;
-        await secureStorageService.saveActiveUser(user);
+        final verifiedUser = user.copyWith(isVerified: true);
+        currentUser = verifiedUser;
+        await secureStorageService.saveActiveUser(verifiedUser);
+        final hasBiometric = await biometricService.isBiometricEnabled();
         final canBiometric = await biometricService.isBiometricAvailable();
-        emit(AuthSuccess(user: user, isFirstLogin: canBiometric));
+        final shouldPromptBiometric = !hasBiometric && canBiometric;
+        _hasPendingBiometricPrompt = shouldPromptBiometric;
+        emit(AuthSuccess(user: verifiedUser, isFirstLogin: shouldPromptBiometric));
         return true;
       } else {
         emit(const AuthError('رمز التحقق غير صحيح أو انتهت صلاحيته'));
@@ -421,6 +474,8 @@ class AuthCubit extends Cubit<AuthState> {
   Future<void> logout() async {
     await secureStorageService.clearActiveUser();
     currentUser = null;
+    _lastPin4Digits = null;
+    _hasPendingBiometricPrompt = false;
     emit(AuthInitial());
   }
 
@@ -433,6 +488,8 @@ class AuthCubit extends Cubit<AuthState> {
       await secureStorageService.wipeAllData();
     } catch (_) {}
     currentUser = null;
+    _lastPin4Digits = null;
+    _hasPendingBiometricPrompt = false;
     emit(AuthInitial());
   }
 }
