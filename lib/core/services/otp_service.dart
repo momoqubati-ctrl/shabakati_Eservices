@@ -44,7 +44,7 @@ class OtpService {
         options: Options(
           headers: {'Content-Type': 'application/json'},
           sendTimeout: const Duration(seconds: 30),
-          receiveTimeout: const Duration(seconds: 30),
+          receiveTimeout: const Duration(seconds: 50),
         ),
       );
 

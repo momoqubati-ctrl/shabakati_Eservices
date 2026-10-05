@@ -802,12 +802,12 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: 18),
 
-                      // حقل كلمة السر (4 أرقام)
+                      // حقل كلمة السر
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            'كلمة السر (4 أرقام)',
+                            'كلمة السر',
                             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                           ),
                           const SizedBox(height: 6),
