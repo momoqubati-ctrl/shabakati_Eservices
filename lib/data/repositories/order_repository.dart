@@ -430,7 +430,7 @@ class OrderRepository implements IOrderRepository {
 
     try {
       final gwUrl =
-          '${ApiConfig.vercelBackendUrl}/api/orders?action=user_orders&user_id=${user.id ?? ''}&account_number=${Uri.encodeComponent(user.accountNumber)}&phone_national=${Uri.encodeComponent(user.phoneNational)}';
+          '${ApiConfig.vercelBackendUrl}/api/orders?action=user_orders&user_id=${user.id ?? ''}&account_number=${Uri.encodeComponent(user.accountNumber)}&phone_national=${Uri.encodeComponent(user.phoneNational)}&session_token=${Uri.encodeComponent(token ?? '')}';
       final gwRes = await _gatewayDio.get(gwUrl);
       if (gwRes.statusCode == 200 && gwRes.data is Map) {
         final newToken = gwRes.data['session_token']?.toString();

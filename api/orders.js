@@ -82,9 +82,14 @@ export default async function handler(req, res) {
       if (!user_id || !account_number) {
         return res.status(400).json({ success: false, error: 'بيانات المستخدم مطلوبة' });
       }
+      const sessionToken =
+        (req.query?.session_token || req.headers['x-session-token'] || '').toString().trim();
+      if (!sessionToken) {
+        return res.status(401).json({ success: false, error: 'غير مصرح بالوصول إلى طلبات هذا الحساب' });
+      }
       try {
         const userVerifyRes = await fetch(
-          `${SUPABASE_URL}/rest/v1/app_users?id=eq.${encodeURIComponent(user_id)}&account_number=eq.${encodeURIComponent(account_number)}&select=id,account_number,phone_national,session_token`,
+          `${SUPABASE_URL}/rest/v1/app_users?id=eq.${encodeURIComponent(user_id)}&account_number=eq.${encodeURIComponent(account_number)}&session_token=eq.${encodeURIComponent(sessionToken)}&select=id,account_number,phone_national,session_token`,
           {
             headers: {
               'apikey': SUPABASE_KEY,
