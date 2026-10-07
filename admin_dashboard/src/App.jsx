@@ -169,8 +169,36 @@ export function App() {
       }
 
       const catRes = await DigitalVaultService.getCatalogProducts();
-      if (catRes?.success && catRes?.data) {
+      if (catRes?.success && Array.isArray(catRes?.data) && catRes.data.length > 0) {
         setProducts(catRes.data);
+      } else {
+        // Fallback مباشر: جلب الكتالوج من جدول cached_products في Supabase
+        const { data: cachedProds } = await supabase
+          .from('cached_products')
+          .select('*')
+          .order('id', { ascending: true });
+        if (Array.isArray(cachedProds) && cachedProds.length > 0) {
+          const formatted = cachedProds.map(p => ({
+            id: p.id,
+            sku: p.sku,
+            name: p.name,
+            availability: (p.availability || 'available').replace(/"/g, ''),
+            pricing_quantity: 1,
+            seller_price: {
+              amount_cents: p.price_cents || 0,
+              currency: p.currency || 'USD'
+            },
+            seller_base_price: {
+              amount_cents: p.price_cents || 0,
+              currency: p.currency || 'USD'
+            },
+            line_total: {
+              amount_cents: p.price_cents || 0,
+              currency: p.currency || 'USD'
+            }
+          }));
+          setProducts(formatted);
+        }
       }
     } catch (e) {
       console.warn('Digital Vault fetch warning:', e);

@@ -67,8 +67,8 @@ export default async function handler(req, res) {
   const API_SECRET = process.env.DIGITAL_VAULT_API_SECRET || secrets.DIGITAL_VAULT_API_SECRET;
   const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!KEY_ID || !API_SECRET || !SUPABASE_KEY) {
-    return res.status(500).json({ success: false, error: 'إعدادات الخادم غير مكتملة' });
+  if (!SUPABASE_KEY) {
+    return res.status(500).json({ success: false, error: 'إعدادات قاعدة البيانات غير مكتملة' });
   }
 
   // =========================================================================
@@ -137,6 +137,9 @@ export default async function handler(req, res) {
       if (!isAdmin) {
         return res.status(401).json({ success: false, error: 'غير مصرح لك بعرض قائمة طلبات المزود' });
       }
+      if (!KEY_ID || !API_SECRET) {
+        return res.status(500).json({ success: false, error: 'إعدادات مزود الخدمة غير مكتملة' });
+      }
       try {
         const signed = signRequest('GET', `/api/seller/v1/orders?limit=${encodeURIComponent(limit)}`, null, KEY_ID, API_SECRET);
         const providerRes = await fetch(`${BASE_URL}/orders?limit=${encodeURIComponent(limit)}`, {
@@ -174,6 +177,9 @@ export default async function handler(req, res) {
     }
 
     if (action === 'consume_key' || action === 'delivery_access') {
+      if (!KEY_ID || !API_SECRET) {
+        return res.status(500).json({ success: false, error: 'إعدادات مزود الخدمة غير مكتملة' });
+      }
       try {
         const tokenSign = signRequest('POST', `/api/seller/v1/orders/${encodeURIComponent(seller_order_id)}/delivery-access`, {}, KEY_ID, API_SECRET);
         tokenSign.headers['Idempotency-Key'] = crypto.randomUUID();
@@ -225,6 +231,10 @@ export default async function handler(req, res) {
         console.error('Consume key error:', err.message);
         return res.status(500).json({ success: false, error: 'تعذر سحب المفتاح الرقمي حالياً' });
       }
+    }
+
+    if (!KEY_ID || !API_SECRET) {
+      return res.status(500).json({ success: false, error: 'إعدادات مزود الخدمة غير مكتملة' });
     }
 
     try {
@@ -306,6 +316,9 @@ export default async function handler(req, res) {
     if (!seller_order_id) {
       return res.status(400).json({ success: false, error: 'seller_order_id is required' });
     }
+    if (!KEY_ID || !API_SECRET) {
+      return res.status(500).json({ success: false, error: 'إعدادات مزود الخدمة غير مكتملة' });
+    }
     try {
       const cancelBody = { reason: String(reason || 'إلغاء الطلب بناء على رغبة العميل').substring(0, 500) };
       const signed = signRequest('POST', `/api/seller/v1/orders/${encodeURIComponent(seller_order_id)}/cancellation-requests`, cancelBody, KEY_ID, API_SECRET);
@@ -326,7 +339,7 @@ export default async function handler(req, res) {
   // 4. إنشاء وتنفيذ الطلب (مع فحص تطابق المبلغ والعملة والقفل الذري لمنع Race Condition)
   // =========================================================================
   try {
-    const { items, external_order_id, device_id, telegram_user, contact_phone, contact_email, payment_id, payment_reference, payment_method, wallet_name, user_id, account_number } = req.body || {};
+    const { items, external_order_id, device_id, telegram_user, contact_phone, contact_email, payment_id, payment_reference, payment_method, wallet_name, user_id, account_number, notes, paid_amount_yer } = req.body || {};
     let externalId = external_order_id || `ord_${crypto.randomUUID().substring(0, 12)}`;
 
     if (!Array.isArray(items) || items.length === 0) {
@@ -463,6 +476,9 @@ export default async function handler(req, res) {
           payment_reference: verifiedPaymentRef,
           payment_method: payment_method || 'المحافظ الإلكترونية',
           wallet_name: verifiedWalletName,
+          notes: (paid_amount_yer || req.body?.paid_amount_yer)
+            ? (notes ? `${notes} | paid_yer:${Number(paid_amount_yer || req.body?.paid_amount_yer)}` : `paid_yer:${Number(paid_amount_yer || req.body?.paid_amount_yer)}`)
+            : (notes || null),
           user_id: user_id || null,
           account_number: account_number || null
         })
@@ -554,6 +570,19 @@ export default async function handler(req, res) {
     };
 
     // 5. إرسال الطلب لمزود الخدمة Digital Vault
+    if (!KEY_ID || !API_SECRET) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          id: existingDbOrderId,
+          external_order_id: externalId,
+          status: 'paid',
+          fulfillment_status: 'processing',
+          total: { amount_cents: initialTotalCents, currency: 'USD' }
+        }
+      });
+    }
+
     const signed = signRequest('POST', '/api/seller/v1/orders', orderPayload, KEY_ID, API_SECRET, externalId);
 
     const providerRes = await fetch(`${BASE_URL}/orders`, {

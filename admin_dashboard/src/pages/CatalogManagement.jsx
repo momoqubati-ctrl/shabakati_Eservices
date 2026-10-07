@@ -93,6 +93,36 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
         });
         setCustomPricing(pricingMap);
       }
+
+      // 3. جلب المنتجات المخزنة من Supabase فوراً إذا كانت القائمة فارغة
+      const { data: cachedProds } = await supabase
+        .from('cached_products')
+        .select('*')
+        .order('id', { ascending: true });
+
+      if (Array.isArray(cachedProds) && cachedProds.length > 0) {
+        const formatted = cachedProds.map((p) => ({
+          id: p.id,
+          sku: p.sku,
+          name: p.name,
+          availability: (p.availability || 'available').replace(/"/g, ''),
+          pricing_quantity: 1,
+          seller_price: {
+            amount_cents: p.price_cents || 0,
+            currency: p.currency || 'USD',
+          },
+          seller_base_price: {
+            amount_cents: p.price_cents || 0,
+            currency: p.currency || 'USD',
+          },
+          line_total: {
+            amount_cents: p.price_cents || 0,
+            currency: p.currency || 'USD',
+          },
+        }));
+        setProducts((prev) => (prev && prev.length > 0 ? prev : formatted));
+        if (onSync) onSync(formatted);
+      }
     } catch (e) {
       console.warn('Error loading pricing settings:', e);
     }
@@ -128,17 +158,55 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
     }
   };
 
-  // مزامنة الكتالوج من المزود
+  // مزامنة الكتالوج من المزود أو قاعدة البيانات
   const handleManualSync = async () => {
     setIsSyncing(true);
     try {
-      const data = await DigitalVaultService.getCatalogProducts();
-      if (data?.success && data?.data) {
-        setProducts(data.data);
-        if (onSync) onSync(data.data);
+      let loaded = false;
+      try {
+        const data = await DigitalVaultService.getCatalogProducts();
+        if (data?.success && Array.isArray(data?.data) && data.data.length > 0) {
+          setProducts(data.data);
+          if (onSync) onSync(data.data);
+          loaded = true;
+        }
+      } catch (_) {}
+
+      if (!loaded) {
+        // Fallback لقاعدة البيانات
+        const { data: cachedProds } = await supabase
+          .from('cached_products')
+          .select('*')
+          .order('id', { ascending: true });
+
+        if (Array.isArray(cachedProds) && cachedProds.length > 0) {
+          const formatted = cachedProds.map((p) => ({
+            id: p.id,
+            sku: p.sku,
+            name: p.name,
+            availability: (p.availability || 'available').replace(/"/g, ''),
+            pricing_quantity: 1,
+            seller_price: {
+              amount_cents: p.price_cents || 0,
+              currency: p.currency || 'USD',
+            },
+            seller_base_price: {
+              amount_cents: p.price_cents || 0,
+              currency: p.currency || 'USD',
+            },
+            line_total: {
+              amount_cents: p.price_cents || 0,
+              currency: p.currency || 'USD',
+            },
+          }));
+          setProducts(formatted);
+          if (onSync) onSync(formatted);
+        } else {
+          alert('تعذر جلب الخدمات من المزود أو من قاعدة البيانات');
+        }
       }
     } catch (e) {
-      alert('فشل جلب الكتالوج من المزود: ' + e.message);
+      alert('فشل جلب الكتالوج: ' + e.message);
     } finally {
       setIsSyncing(false);
     }
@@ -276,8 +344,29 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
       </div>
 
       {/* شبكة عرض وتعديل المنتجات */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {products.map((product) => {
+      {products.length === 0 ? (
+        <div className="bg-white dark:bg-slate-800 p-12 rounded-3xl border border-slate-200 dark:border-slate-700/80 text-center space-y-4 shadow-sm">
+          <div className="w-16 h-16 mx-auto bg-blue-50 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center text-blue-600">
+            <RefreshCw className={`w-8 h-8 ${isSyncing ? 'animate-spin' : ''}`} />
+          </div>
+          <h4 className="text-base font-bold text-slate-800 dark:text-slate-100">
+            {isSyncing ? 'جاري جلب الكتالوج من قاعدة البيانات...' : 'لم يتم تحميل أي خدمات في الكتالوج حالياً'}
+          </h4>
+          <p className="text-xs text-slate-500 max-w-md mx-auto">
+            اضغط على الزر أدناه لتحميل قائمة الخدمات فوراً وتحديث الأسعار.
+          </p>
+          <button
+            onClick={handleManualSync}
+            disabled={isSyncing}
+            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-blue-500/20 transition-all inline-flex items-center gap-2"
+          >
+            <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+            <span>تحميل الكتالوج الآن</span>
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {products.map((product) => {
           const costUsd = (product.seller_price?.amount_cents || 0) / 100;
           const costYer = Math.round(costUsd * exchangeRate);
           const isAvail = product.availability === 'available';
@@ -590,7 +679,8 @@ export const CatalogManagement = ({ initialProducts = [], onSync }) => {
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

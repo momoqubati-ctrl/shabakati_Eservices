@@ -135,6 +135,20 @@ class SecureStorageService {
     }
   }
 
+  /// حفظ المبلغ الفعلي المدفوع بالريال اليمني محلياً
+  Future<void> saveOrderPaidAmount(String orderIdOrExternal, double amountYer) async {
+    await _storage.write(key: 'paid_amount_$orderIdOrExternal', value: amountYer.toString());
+  }
+
+  /// استرجاع المبلغ الفعلي المدفوع بالريال اليمني محلياً
+  Future<double?> getOrderPaidAmount(String orderIdOrExternal) async {
+    final val = await _storage.read(key: 'paid_amount_$orderIdOrExternal');
+    if (val != null && val.isNotEmpty) {
+      return double.tryParse(val);
+    }
+    return null;
+  }
+
   /// مسح نهائي وشامل لكافة بيانات التطبيق والتخزين المشفر عند تسجيل الخروج النهائي
   Future<void> wipeAllData() async {
     await _storage.deleteAll();

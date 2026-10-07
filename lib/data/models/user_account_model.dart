@@ -42,6 +42,7 @@ class UserAccountModel {
 
   Map<String, dynamic> toJson() {
     return {
+      if (id != null) 'id': id,
       'account_number': accountNumber,
       'dial_code': dialCode,
       'phone_national': phoneNational,
@@ -49,6 +50,7 @@ class UserAccountModel {
       'region': region,
       'is_verified': isVerified,
       'biometric_enabled': biometricEnabled,
+      'created_at': createdAt.toIso8601String(),
       if (sessionToken != null) 'session_token': sessionToken,
     };
   }

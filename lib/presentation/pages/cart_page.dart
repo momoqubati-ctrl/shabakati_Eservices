@@ -251,6 +251,7 @@ class CartPage extends StatelessWidget {
               walletName: paymentResult.walletName,
               userId: currentUser.id,
               accountNumber: currentUser.accountNumber,
+              paidAmountYer: cartState.totalAmountYer(),
             );
 
             if (!context.mounted) return;

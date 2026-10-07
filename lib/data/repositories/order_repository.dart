@@ -23,6 +23,7 @@ abstract class IOrderRepository {
     String? walletName,
     int? userId,
     String? accountNumber,
+    double? paidAmountYer,
   });
 
   Future<List<OrderModel>> getOrdersForUser(UserAccountModel user);
@@ -67,6 +68,7 @@ class OrderRepository implements IOrderRepository {
     String? walletName,
     int? userId,
     String? accountNumber,
+    double? paidAmountYer,
   }) async {
     final resolvedExternalOrderId =
         (externalOrderId != null && externalOrderId.trim().isNotEmpty)
@@ -180,7 +182,12 @@ class OrderRepository implements IOrderRepository {
       walletName: walletName,
       userId: userId,
       accountNumber: accountNumber,
+      paidAmountYer: paidAmountYer ?? (items.isNotEmpty ? items.fold<double>(0.0, (sum, i) => sum + i.totalAmountYer()) : null),
     );
+
+    if (secureStorageService != null && createdOrder.paidAmountYer != null && createdOrder.paidAmountYer! > 0) {
+      await secureStorageService!.saveOrderPaidAmount(effectiveOrderId, createdOrder.paidAmountYer!);
+    }
 
     try {
       await _saveOrderToSupabase(
@@ -375,6 +382,11 @@ class OrderRepository implements IOrderRepository {
             'payment_reference': order.paymentReference ?? order.paymentId,
             'payment_method': order.paymentMethod ?? 'المحافظ الإلكترونية',
             'wallet_name': order.walletName,
+            'notes': (order.paidAmountYer != null && order.paidAmountYer! > 0)
+                ? (order.notes != null && order.notes!.trim().isNotEmpty
+                    ? (!order.notes!.contains('paid_yer:') ? '${order.notes!.trim()} | paid_yer:${order.paidAmountYer!.toInt()}' : order.notes!)
+                    : 'paid_yer:${order.paidAmountYer!.toInt()}')
+                : order.notes,
             'user_id': userId,
             'account_number': accountNumber,
           })
@@ -401,12 +413,88 @@ class OrderRepository implements IOrderRepository {
     }
   }
 
+  Map<int, double>? _priceByCentsCache;
+
+  Future<List<OrderModel>> _enrichOrdersWithRealPrices(List<OrderModel> list) async {
+    final enriched = <OrderModel>[];
+    for (final order in list) {
+      // 1. إذا كان السعر الحقيقي محفوظاً مسبقاً، نتركه كما هو
+      if (order.paidAmountYer != null && order.paidAmountYer! > 0) {
+        enriched.add(order);
+        continue;
+      }
+
+      // 2. فحص التخزين المحلي المشفر للمبلغ
+      if (secureStorageService != null) {
+        final cachedAmount = await secureStorageService!.getOrderPaidAmount(order.externalOrderId);
+        if (cachedAmount != null && cachedAmount > 0) {
+          enriched.add(order.copyWith(paidAmountYer: cachedAmount));
+          continue;
+        }
+        if (order.id != null) {
+          final cachedAmountById = await secureStorageService!.getOrderPaidAmount(order.id.toString());
+          if (cachedAmountById != null && cachedAmountById > 0) {
+            enriched.add(order.copyWith(paidAmountYer: cachedAmountById));
+            continue;
+          }
+        }
+      }
+
+      // 3. مطابقة السعر من جدول إعدادات المنتجات product_settings عبر cents المزود
+      final matchedYer = await _lookupCustomPriceYer(order.totalCents);
+      if (matchedYer != null && matchedYer > 0) {
+        enriched.add(order.copyWith(paidAmountYer: matchedYer));
+        continue;
+      }
+
+      enriched.add(order);
+    }
+    return enriched;
+  }
+
+  Future<double?> _lookupCustomPriceYer(int totalCents) async {
+    if (_priceByCentsCache == null) {
+      _priceByCentsCache = {};
+      if (supabaseClient != null) {
+        try {
+          final results = await Future.wait([
+            supabaseClient!.from('cached_products').select('id, price_cents'),
+            supabaseClient!.from('product_settings').select('product_id, custom_price_yer'),
+          ]);
+          final productsRes = results[0] as List;
+          final settingsRes = results[1] as List;
+
+          final settingsMap = <int, double>{};
+          for (final s in settingsRes) {
+            final pid = s['product_id'] as int?;
+            final yer = (s['custom_price_yer'] as num?)?.toDouble();
+            if (pid != null && yer != null) {
+              settingsMap[pid] = yer;
+            }
+          }
+          for (final p in productsRes) {
+            final pid = p['id'] as int?;
+            final cents = p['price_cents'] as int?;
+            if (pid != null && cents != null && settingsMap.containsKey(pid)) {
+              _priceByCentsCache![cents] = settingsMap[pid]!;
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    if (_priceByCentsCache != null && _priceByCentsCache!.containsKey(totalCents)) {
+      return _priceByCentsCache![totalCents];
+    }
+    return null;
+  }
+
   @override
   Future<List<OrderModel>> getOrdersForUser(UserAccountModel user) async {
     String? token = user.sessionToken;
-    if ((token == null || token.isEmpty) && secureStorageService != null) {
+    if (secureStorageService != null) {
       final saved = await secureStorageService!.getActiveUser();
-      if (saved != null && saved.accountNumber == user.accountNumber) {
+      if (saved != null && saved.accountNumber == user.accountNumber && saved.sessionToken != null && saved.sessionToken!.isNotEmpty) {
         token = saved.sessionToken;
       }
     }
@@ -414,7 +502,7 @@ class OrderRepository implements IOrderRepository {
     if (supabaseClient != null && token != null && token.isNotEmpty) {
       try {
         final res = await supabaseClient!.rpc('rpc_get_user_orders', params: {
-          'p_account_number': user.accountNumber,
+          'p_account_number': user.accountNumber.startsWith('+') ? user.accountNumber : '+${user.accountNumber}',
           'p_phone_national': user.phoneNational,
           'p_user_id': user.id,
           'p_session_token': token,
@@ -422,9 +510,22 @@ class OrderRepository implements IOrderRepository {
 
         final list = (res as List).map((json) => OrderModel.fromJson(Map<String, dynamic>.from(json as Map))).toList();
         final userOrders = list.where((o) => o.matchesUser(user)).toList();
-        return await _mergeDeliveredAssets(userOrders);
+        final merged = await _mergeDeliveredAssets(userOrders);
+        return await _enrichOrdersWithRealPrices(merged);
       } catch (e) {
-        debugPrint('[OrderRepo] rpc_get_user_orders error, trying gateway fallback: $e');
+        debugPrint('[OrderRepo] rpc_get_user_orders error with full params, retrying with token only: $e');
+        // المحاولة الذكية: إذا كان الخطأ بسبب صيغة رقم الحساب (+ أو بدون +)، نرسل فقط p_session_token
+        try {
+          final res = await supabaseClient!.rpc('rpc_get_user_orders', params: {
+            'p_session_token': token,
+          });
+          final list = (res as List).map((json) => OrderModel.fromJson(Map<String, dynamic>.from(json as Map))).toList();
+          final userOrders = list.where((o) => o.matchesUser(user)).toList();
+          final merged = await _mergeDeliveredAssets(userOrders);
+          return await _enrichOrdersWithRealPrices(merged);
+        } catch (e2) {
+          debugPrint('[OrderRepo] rpc_get_user_orders token-only error: $e2');
+        }
       }
     }
 
@@ -440,7 +541,8 @@ class OrderRepository implements IOrderRepository {
         final rawList = gwRes.data['data'] as List? ?? [];
         final list = rawList.map((json) => OrderModel.fromJson(Map<String, dynamic>.from(json as Map))).toList();
         final userOrders = list.where((o) => o.matchesUser(user)).toList();
-        return await _mergeDeliveredAssets(userOrders);
+        final merged = await _mergeDeliveredAssets(userOrders);
+        return await _enrichOrdersWithRealPrices(merged);
       }
     } catch (e) {
       debugPrint('[OrderRepo] gateway user_orders error: $e');
@@ -452,8 +554,20 @@ class OrderRepository implements IOrderRepository {
   @override
   Stream<List<OrderModel>> streamOrdersForUser(UserAccountModel user) async* {
     if (supabaseClient == null) return;
-    yield await getOrdersForUser(user);
-    yield* Stream.periodic(const Duration(seconds: 10)).asyncMap((_) => getOrdersForUser(user));
+    List<OrderModel> lastKnownOrders = await getOrdersForUser(user);
+    if (lastKnownOrders.isNotEmpty) {
+      yield lastKnownOrders;
+    }
+    await for (final _ in Stream.periodic(const Duration(seconds: 15))) {
+      final fresh = await getOrdersForUser(user);
+      if (fresh.isNotEmpty) {
+        lastKnownOrders = fresh;
+        yield fresh;
+      } else if (lastKnownOrders.isNotEmpty) {
+        // حماية تامة: إذا فشل الاتصال المؤقت، لا نمسح الطلبات المعروضة
+        yield lastKnownOrders;
+      }
+    }
   }
 
   @override

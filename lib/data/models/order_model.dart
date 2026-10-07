@@ -21,6 +21,8 @@ class OrderModel {
   final String? walletName;
   final int? userId;
   final String? accountNumber;
+  /// المبلغ الفعلي المدفوع بالريال اليمني وقت الشراء (من product_settings.custom_price_yer)
+  final double? paidAmountYer;
 
   OrderModel({
     this.id,
@@ -42,6 +44,7 @@ class OrderModel {
     this.walletName,
     this.userId,
     this.accountNumber,
+    this.paidAmountYer,
   });
 
   bool get isReady =>
@@ -92,6 +95,7 @@ class OrderModel {
     String? walletName,
     int? userId,
     String? accountNumber,
+    double? paidAmountYer,
   }) {
     return OrderModel(
       id: id ?? this.id,
@@ -113,6 +117,7 @@ class OrderModel {
       walletName: walletName ?? this.walletName,
       userId: userId ?? this.userId,
       accountNumber: accountNumber ?? this.accountNumber,
+      paidAmountYer: paidAmountYer ?? this.paidAmountYer,
     );
   }
 
@@ -120,7 +125,13 @@ class OrderModel {
   String get displayTotal => '\$${totalAmount.toStringAsFixed(2)} $currency';
 
   /// احتساب السعر بالريال اليمني للطلب
+  /// يستخدم السعر الفعلي المحفوظ وقت الشراء (paidAmountYer) إذا كان متوفراً
+  /// ويعود للحساب التقديري فقط للطلبات القديمة التي لا تحتوي هذا الحقل
   double totalAmountYer({double exchangeRate = 535.0}) {
+    if (paidAmountYer != null && paidAmountYer! > 0) {
+      return paidAmountYer!;
+    }
+    // fallback للطلبات القديمة بدون سعر محفوظ
     final costYer = (totalCents / 100.0) * exchangeRate;
     final withMargin = costYer + 1000.0;
     return (withMargin / 1000.0).ceil() * 1000.0;
@@ -169,6 +180,19 @@ class OrderModel {
       }
     }
 
+    double? parsedPaidYer;
+    if (json['paid_amount_yer'] != null) {
+      parsedPaidYer = (json['paid_amount_yer'] as num).toDouble();
+    } else if (json['amount_yer'] != null) {
+      parsedPaidYer = (json['amount_yer'] as num).toDouble();
+    } else if (json['notes'] != null) {
+      final notesStr = json['notes'].toString();
+      final match = RegExp(r'paid_yer:(\d+(?:\.\d+)?)').firstMatch(notesStr);
+      if (match != null) {
+        parsedPaidYer = double.tryParse(match.group(1)!);
+      }
+    }
+
     return OrderModel(
       id: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? ''),
       externalOrderId: json['external_order_id'] ?? '',
@@ -194,6 +218,7 @@ class OrderModel {
       walletName: json['wallet_name']?.toString(),
       userId: json['user_id'] is int ? json['user_id'] : int.tryParse(json['user_id']?.toString() ?? ''),
       accountNumber: json['account_number']?.toString(),
+      paidAmountYer: parsedPaidYer,
     );
   }
 
@@ -219,9 +244,11 @@ class OrderModel {
       'payment_id': paymentId,
       'payment_reference': paymentReference ?? paymentId,
       'payment_method': paymentMethod ?? 'المحافظ الإلكترونية',
-      'wallet_name': walletName,
-      'notes': notes,
-      'user_id': userId,
+      'notes': (paidAmountYer != null && paidAmountYer! > 0)
+          ? ((notes != null && notes!.trim().isNotEmpty)
+              ? (!notes!.contains('paid_yer:') ? '${notes!.trim()} | paid_yer:${paidAmountYer!.toInt()}' : notes!)
+              : 'paid_yer:${paidAmountYer!.toInt()}')
+          : notes,
       'account_number': accountNumber,
       'created_at': createdAt.toIso8601String(),
       'updated_at': DateTime.now().toUtc().toIso8601String(),

@@ -115,16 +115,26 @@ class OrdersCubit extends Cubit<OrdersState> {
       _ordersSubscription = orderRepository
           .streamOrdersForUser(user)
           .listen((ordersList) async {
+        if (ordersList.isEmpty && state is OrdersLoaded && (state as OrdersLoaded).orders.isNotEmpty) {
+          return;
+        }
         final mergedList = await _mergeWithLocalCache(ordersList);
         emit(OrdersLoaded(mergedList));
       }, onError: (_) async {
+        if (state is OrdersLoaded && (state as OrdersLoaded).orders.isNotEmpty) {
+          return;
+        }
         final fallbackList = await orderRepository.getOrdersForUser(user);
-        final mergedFallback = await _mergeWithLocalCache(fallbackList);
-        emit(OrdersLoaded(mergedFallback));
+        if (fallbackList.isNotEmpty) {
+          final mergedFallback = await _mergeWithLocalCache(fallbackList);
+          emit(OrdersLoaded(mergedFallback));
+        }
       });
     } catch (e) {
       debugPrint('[OrdersCubit] loadOrdersForUser error: $e');
-      emit(OrdersLoaded(const []));
+      if (state is! OrdersLoaded || (state as OrdersLoaded).orders.isEmpty) {
+        emit(OrdersLoaded(const []));
+      }
     }
   }
 
@@ -204,6 +214,7 @@ class OrdersCubit extends Cubit<OrdersState> {
     String? walletName,
     int? userId,
     String? accountNumber,
+    double? paidAmountYer,
   }) async {
     emit(OrderSubmitting());
     try {
@@ -228,6 +239,7 @@ class OrdersCubit extends Cubit<OrdersState> {
         walletName: walletName,
         userId: resolvedUserId,
         accountNumber: resolvedAccountNumber,
+        paidAmountYer: paidAmountYer,
       );
 
       final successState = OrderSubmitSuccess(
@@ -257,6 +269,7 @@ class OrdersCubit extends Cubit<OrdersState> {
         walletName: walletName,
         userId: userId ?? _currentUser?.id,
         accountNumber: accountNumber ?? _currentUser?.accountNumber,
+        paidAmountYer: paidAmountYer,
       );
       return OrderSubmitResult(
         isSuccess: false,
