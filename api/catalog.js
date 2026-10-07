@@ -21,11 +21,30 @@ export default async function handler(req, res) {
     const API_SECRET = process.env.DIGITAL_VAULT_API_SECRET || secrets.DIGITAL_VAULT_API_SECRET;
     const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY;
 
-    if (!KEY_ID || !API_SECRET) {
-      return res.status(500).json({ success: false, error: 'إعدادات مزود الخدمة غير مكتملة في الخادم' });
-    }
-
     const { action, product_id, cursor, limit = '50' } = req.query || {};
+
+    // إذا لم تكن مفاتيح المزود الخارجي مهيأة في متغيرات البيئة، نعتمد فوراً على قاعدة بيانات Supabase
+    if (!KEY_ID || !API_SECRET) {
+      if (action === 'seller_profile' || action === 'seller_wallet') {
+        const isAdmin = await verifyAdminAuth(req, SUPABASE_ANON);
+        if (!isAdmin) {
+          return res.status(401).json({ success: false, error: 'غير مصرح بالوصول لبيانات التاجر' });
+        }
+        return res.status(200).json({
+          success: true,
+          data: action === 'seller_wallet'
+            ? { available_balance: { amount_cents: 0, currency: 'USD' } }
+            : { name: 'متجر شبكتي للخدمات الإلكترونية', email: 'admin@shabakti.com', status: 'active' }
+        });
+      }
+
+      // جلب الكتالوج من قاعدة بيانات Supabase
+      const fallbackProds = await getFallbackCachedProducts(SUPABASE_URL, SUPABASE_KEY || SUPABASE_ANON, product_id);
+      return res.status(200).json({
+        success: true,
+        data: fallbackProds
+      });
+    }
     let endpointSubPath = '';
 
     if (action === 'seller_profile' || action === 'seller_wallet') {
@@ -100,12 +119,74 @@ export default async function handler(req, res) {
       }
     }
 
+    if (!response.ok && !action) {
+      const fallbackProds = await getFallbackCachedProducts(SUPABASE_URL, SUPABASE_KEY || SUPABASE_ANON, product_id);
+      if ((Array.isArray(fallbackProds) && fallbackProds.length > 0) || (product_id && fallbackProds)) {
+        return res.status(200).json({ success: true, data: fallbackProds });
+      }
+    }
+
     return res.status(response.status).json(data);
   } catch (error) {
     console.error('Catalog API error:', error.message);
+    const { action, product_id } = req.query || {};
+    if (!action) {
+      try {
+        const fallbackProds = await getFallbackCachedProducts(SUPABASE_URL, SUPABASE_KEY || SUPABASE_ANON, product_id);
+        if ((Array.isArray(fallbackProds) && fallbackProds.length > 0) || (product_id && fallbackProds)) {
+          return res.status(200).json({ success: true, data: fallbackProds });
+        }
+      } catch (_) {}
+    }
     return res.status(500).json({
       success: false,
       error: 'تعذر جلب البيانات من مزود الخدمة حالياً'
     });
+  }
+}
+
+async function getFallbackCachedProducts(supabaseUrl, supabaseKey, productId) {
+  try {
+    let url = `${supabaseUrl}/rest/v1/cached_products`;
+    if (productId) {
+      url += `?id=eq.${encodeURIComponent(productId)}`;
+    } else {
+      url += `?order=id.asc`;
+    }
+    const res = await fetch(url, {
+      headers: {
+        'apikey': supabaseKey,
+        'Authorization': `Bearer ${supabaseKey}`
+      }
+    });
+    const rows = res.ok ? await res.json() : [];
+    if (!Array.isArray(rows)) return [];
+
+    const formatted = rows.map(p => ({
+      id: p.id,
+      sku: p.sku || `product-${p.id}`,
+      name: p.name,
+      availability: (p.availability || 'available').replace(/"/g, ''),
+      pricing_quantity: 1,
+      seller_price: {
+        amount_cents: p.price_cents || 0,
+        currency: p.currency || 'USD'
+      },
+      seller_base_price: {
+        amount_cents: p.price_cents || 0,
+        currency: p.currency || 'USD'
+      },
+      line_total: {
+        amount_cents: p.price_cents || 0,
+        currency: p.currency || 'USD'
+      }
+    }));
+
+    if (productId && formatted.length > 0) {
+      return formatted[0];
+    }
+    return formatted;
+  } catch (_) {
+    return [];
   }
 }
