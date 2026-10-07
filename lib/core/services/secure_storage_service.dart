@@ -9,8 +9,25 @@ class SecureStorageService {
   static const String _keyTelegramUser = 'saved_telegram_user';
   static const String _keyActiveUser = 'saved_active_user_data';
   static const String _keySessionExpiresAt = 'saved_session_expires_at';
+  static const String _keyOnboardingSeen = 'has_seen_onboarding_v1';
 
   static const Duration defaultSessionDuration = Duration(hours: 4);
+
+  /// هل شاهد المستخدم شاشات التعريف والترحيب مسبقاً؟
+  Future<bool> hasSeenOnboarding() async {
+    final val = await _storage.read(key: _keyOnboardingSeen);
+    return val == 'true';
+  }
+
+  /// تعيين شاشات التعريف والترحيب كمشاهدة
+  Future<void> setOnboardingSeen() async {
+    await _storage.write(key: _keyOnboardingSeen, value: 'true');
+  }
+
+  /// إعادة تعيين حالة شاشات التعريف (لإمكانية استعراضها مجدداً)
+  Future<void> resetOnboardingSeen() async {
+    await _storage.delete(key: _keyOnboardingSeen);
+  }
 
   Future<String> getOrCreateDeviceId() async {
     String? deviceId = await _storage.read(key: _keyDeviceId);

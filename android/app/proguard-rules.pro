@@ -18,3 +18,6 @@
 -dontwarn okhttp3.**
 -dontwarn okio.**
 -dontwarn javax.annotation.**
+
+# Play Core (Flutter deferred components / splitcompat)
+-dontwarn com.google.android.play.core.**

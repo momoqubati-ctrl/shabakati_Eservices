@@ -17,6 +17,7 @@ import 'logic/catalog/catalog_cubit.dart';
 import 'logic/orders/orders_cubit.dart';
 import 'presentation/pages/auth/login_page.dart';
 import 'presentation/pages/home_navigation_page.dart';
+import 'presentation/pages/onboarding_splash_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -96,8 +97,64 @@ class ShabaktiEservicesApp extends StatelessWidget {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.system,
-      home: const AuthGate(),
+      home: const AppStartupGate(),
     );
+  }
+}
+
+/// بوابة الانطلاق الأولى: تفحص عرض شاشات التعريف والترحيب (السبلاش) لأول مرة
+class AppStartupGate extends StatefulWidget {
+  const AppStartupGate({super.key});
+
+  @override
+  State<AppStartupGate> createState() => _AppStartupGateState();
+}
+
+class _AppStartupGateState extends State<AppStartupGate> {
+  bool _isLoading = true;
+  bool _hasSeenOnboarding = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkOnboardingState();
+  }
+
+  Future<void> _checkOnboardingState() async {
+    final storage = context.read<SecureStorageService>();
+    final seen = await storage.hasSeenOnboarding();
+    if (mounted) {
+      setState(() {
+        _hasSeenOnboarding = seen;
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF090D16),
+        body: Center(
+          child: CircularProgressIndicator(
+            color: Color(0xFF2563EB),
+          ),
+        ),
+      );
+    }
+
+    if (!_hasSeenOnboarding) {
+      return OnboardingSplashPage(
+        onComplete: () {
+          setState(() {
+            _hasSeenOnboarding = true;
+          });
+        },
+      );
+    }
+
+    return const AuthGate();
   }
 }
 
