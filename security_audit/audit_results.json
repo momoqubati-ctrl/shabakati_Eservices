@@ -1,0 +1,475 @@
+{
+  "total": 78,
+  "passed": 78,
+  "failed": 0,
+  "results": [
+    {
+      "suite": "00_jwt_setup",
+      "test": "Real GoTrue JWT acquired for normal authenticated user",
+      "status": "PASS",
+      "evidence": "JWT length=967"
+    },
+    {
+      "suite": "00_jwt_setup",
+      "test": "Real GoTrue JWT acquired for admin user",
+      "status": "PASS",
+      "evidence": "JWT length=858"
+    },
+    {
+      "suite": "01_anon_access",
+      "test": "anon SELECT on orders is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 401"
+    },
+    {
+      "suite": "01_anon_access",
+      "test": "anon SELECT on order_items is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 401"
+    },
+    {
+      "suite": "01_anon_access",
+      "test": "anon SELECT on payments is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 401"
+    },
+    {
+      "suite": "01_anon_access",
+      "test": "anon SELECT on payment_logs is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 401"
+    },
+    {
+      "suite": "01_anon_access",
+      "test": "anon SELECT on app_users is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 401"
+    },
+    {
+      "suite": "01_anon_access",
+      "test": "anon SELECT on phone_otps is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 401"
+    },
+    {
+      "suite": "01_anon_access",
+      "test": "anon SELECT on backend_secrets is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 401"
+    },
+    {
+      "suite": "01_anon_access",
+      "test": "anon SELECT on verified_challenges is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 401"
+    },
+    {
+      "suite": "01_anon_access",
+      "test": "anon SELECT on app_settings is ALLOWED",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "suite": "01_anon_access",
+      "test": "anon WRITE on app_settings is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 401"
+    },
+    {
+      "suite": "01_anon_access",
+      "test": "anon SELECT on product_settings is ALLOWED",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "suite": "01_anon_access",
+      "test": "anon WRITE on product_settings is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 401"
+    },
+    {
+      "suite": "02_authenticated_access",
+      "test": "normal authenticated SELECT on orders returns 0 rows / DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 200, rows=0"
+    },
+    {
+      "suite": "02_authenticated_access",
+      "test": "normal authenticated SELECT on order_items returns 0 rows / DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 200, rows=0"
+    },
+    {
+      "suite": "02_authenticated_access",
+      "test": "normal authenticated SELECT on payments returns 0 rows / DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 200, rows=0"
+    },
+    {
+      "suite": "02_authenticated_access",
+      "test": "normal authenticated SELECT on payment_logs returns 0 rows / DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 200, rows=0"
+    },
+    {
+      "suite": "02_authenticated_access",
+      "test": "normal authenticated SELECT on app_users returns 0 rows / DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 200, rows=0"
+    },
+    {
+      "suite": "02_authenticated_access",
+      "test": "normal authenticated WRITE on app_settings is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 403"
+    },
+    {
+      "suite": "02_authenticated_access",
+      "test": "normal authenticated WRITE on product_settings is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 403"
+    },
+    {
+      "suite": "03_admin_access",
+      "test": "admin SELECT on orders is ALLOWED",
+      "status": "PASS",
+      "evidence": "HTTP 200, count=2"
+    },
+    {
+      "suite": "03_admin_access",
+      "test": "admin SELECT on order_items is ALLOWED",
+      "status": "PASS",
+      "evidence": "HTTP 200, count=2"
+    },
+    {
+      "suite": "03_admin_access",
+      "test": "admin SELECT on payments is ALLOWED",
+      "status": "PASS",
+      "evidence": "HTTP 200, count=2"
+    },
+    {
+      "suite": "03_admin_access",
+      "test": "admin SELECT on payment_logs is ALLOWED",
+      "status": "PASS",
+      "evidence": "HTTP 200, count=2"
+    },
+    {
+      "suite": "03_admin_access",
+      "test": "admin SELECT on app_users is ALLOWED",
+      "status": "PASS",
+      "evidence": "HTTP 200, count=2"
+    },
+    {
+      "suite": "03_admin_access",
+      "test": "admin SELECT on app_settings is ALLOWED",
+      "status": "PASS",
+      "evidence": "HTTP 200, count=1"
+    },
+    {
+      "suite": "03_admin_access",
+      "test": "admin SELECT on product_settings is ALLOWED",
+      "status": "PASS",
+      "evidence": "HTTP 200, count=2"
+    },
+    {
+      "suite": "03_admin_access",
+      "test": "admin direct SELECT on backend_secrets is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 403"
+    },
+    {
+      "suite": "03_admin_access",
+      "test": "admin direct SELECT on phone_otps is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 403"
+    },
+    {
+      "suite": "03_admin_access",
+      "test": "admin direct SELECT on verified_challenges is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 403"
+    },
+    {
+      "suite": "04_rpc_permissions",
+      "test": "anon -> rpc_get_backend_secrets is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 401"
+    },
+    {
+      "suite": "04_rpc_permissions",
+      "test": "anon -> rpc_create_phone_otp is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 401"
+    },
+    {
+      "suite": "04_rpc_permissions",
+      "test": "authenticated -> rpc_get_backend_secrets is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 403"
+    },
+    {
+      "suite": "04_rpc_permissions",
+      "test": "authenticated -> rpc_create_phone_otp is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 403"
+    },
+    {
+      "suite": "04_rpc_permissions",
+      "test": "admin -> rpc_get_backend_secrets is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 403"
+    },
+    {
+      "suite": "04_rpc_permissions",
+      "test": "admin -> rpc_create_phone_otp is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 403"
+    },
+    {
+      "suite": "04_rpc_permissions",
+      "test": "service_role -> rpc_get_backend_secrets with wrong handshake is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 403"
+    },
+    {
+      "suite": "04_rpc_permissions",
+      "test": "service_role -> rpc_get_backend_secrets with valid handshake is ALLOWED",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "suite": "05_otp_security",
+      "test": "Register test user for OTP & Reset lifecycle",
+      "status": "PASS",
+      "evidence": "HTTP 200, id=10"
+    },
+    {
+      "suite": "06_password_reset",
+      "test": "Password reset WITHOUT OTP is DENIED",
+      "status": "PASS",
+      "evidence": "{\"error\": \"OTP_NOT_VERIFIED\"}"
+    },
+    {
+      "suite": "05_otp_security",
+      "test": "Old superseded OTP is DENIED",
+      "status": "PASS",
+      "evidence": "verify=false"
+    },
+    {
+      "suite": "06_password_reset",
+      "test": "Password reset when old OTP is_used=true (unverified) is DENIED",
+      "status": "PASS",
+      "evidence": "{\"error\": \"OTP_NOT_VERIFIED\"}"
+    },
+    {
+      "suite": "05_otp_security",
+      "test": "Wrong OTP attempt is DENIED",
+      "status": "PASS",
+      "evidence": "attempt 1=false"
+    },
+    {
+      "suite": "05_otp_security",
+      "test": "Correct OTP after 5 failed attempts is DENIED",
+      "status": "PASS",
+      "evidence": "attempt 6=false"
+    },
+    {
+      "suite": "06_password_reset",
+      "test": "Password reset after 5 wrong OTP attempts is DENIED",
+      "status": "PASS",
+      "evidence": "{\"error\": \"OTP_NOT_VERIFIED\"}"
+    },
+    {
+      "suite": "05_otp_security",
+      "test": "OTP rate limit blocks >3 requests within 3 minutes",
+      "status": "PASS",
+      "evidence": "{\"error\": \"RATE_LIMITED\", \"success\": false}"
+    },
+    {
+      "suite": "05_otp_security",
+      "test": "Expired OTP is DENIED",
+      "status": "PASS",
+      "evidence": "expired verify=false"
+    },
+    {
+      "suite": "05_otp_security",
+      "test": "Valid OTP verification succeeds",
+      "status": "PASS",
+      "evidence": "verify=true"
+    },
+    {
+      "suite": "05_otp_security",
+      "test": "OTP replay (used OTP) is DENIED",
+      "status": "PASS",
+      "evidence": "replay=false"
+    },
+    {
+      "suite": "06_password_reset",
+      "test": "Password reset after valid OTP succeeds",
+      "status": "PASS",
+      "evidence": "{\"success\": true, \"account_number\": \"+967799998877\"}"
+    },
+    {
+      "suite": "06_password_reset",
+      "test": "Password reset replay after challenge consumed is DENIED",
+      "status": "PASS",
+      "evidence": "{\"error\": \"OTP_NOT_VERIFIED\"}"
+    },
+    {
+      "suite": "06_password_reset",
+      "test": "Password reset after challenge expiration is DENIED",
+      "status": "PASS",
+      "evidence": "{\"error\": \"OTP_NOT_VERIFIED\"}"
+    },
+    {
+      "suite": "07_idor",
+      "test": "Customer login issues valid session_token",
+      "status": "PASS",
+      "evidence": "session_token present=True"
+    },
+    {
+      "suite": "07_idor",
+      "test": "rpc_get_user_orders without session_token is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 401"
+    },
+    {
+      "suite": "07_idor",
+      "test": "rpc_get_user_orders with invalid session_token is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 401"
+    },
+    {
+      "suite": "07_idor",
+      "test": "rpc_get_user_orders cross-user BOLA attempt is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 401"
+    },
+    {
+      "suite": "07_idor",
+      "test": "rpc_get_user_orders with valid owner session_token is ALLOWED",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "suite": "07_idor",
+      "test": "rpc_update_biometric cross-user attempt is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 401"
+    },
+    {
+      "suite": "07_idor",
+      "test": "rpc_register_user blocks overwriting unverified account within active OTP window",
+      "status": "PASS",
+      "evidence": "{\"error\": \"REGISTRATION_PENDING_VERIFICATION\"}"
+    },
+    {
+      "suite": "08_order_items",
+      "test": "anon SELECT order_items is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 401"
+    },
+    {
+      "suite": "08_order_items",
+      "test": "anon INSERT order_items is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 401"
+    },
+    {
+      "suite": "08_order_items",
+      "test": "normal authenticated SELECT order_items returns 0 rows / DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 200, rows=[]"
+    },
+    {
+      "suite": "08_order_items",
+      "test": "normal authenticated INSERT order_items is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 403"
+    },
+    {
+      "suite": "08_order_items",
+      "test": "admin SELECT order_items is ALLOWED",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "suite": "08_order_items",
+      "test": "service_role SELECT order_items is ALLOWED",
+      "status": "PASS",
+      "evidence": "HTTP 200"
+    },
+    {
+      "suite": "09_storage",
+      "test": "anon upload to service-icons is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 400: {\"statusCode\":\"403\",\"error\":\"Unauthorized\",\"message\":\"new row violates row-level"
+    },
+    {
+      "suite": "09_storage",
+      "test": "normal authenticated upload to service-icons is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 400: {\"statusCode\":\"403\",\"error\":\"Unauthorized\",\"message\":\"new row violates row-level"
+    },
+    {
+      "suite": "09_storage",
+      "test": "admin HTML upload to service-icons is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 400: {\"statusCode\":\"415\",\"error\":\"invalid_mime_type\",\"message\":\"mime type text/html i"
+    },
+    {
+      "suite": "09_storage",
+      "test": "admin SVG upload to service-icons is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 400: {\"statusCode\":\"415\",\"error\":\"invalid_mime_type\",\"message\":\"mime type image/svg+x"
+    },
+    {
+      "suite": "09_storage",
+      "test": "admin >2MB upload to service-icons is DENIED",
+      "status": "PASS",
+      "evidence": "HTTP 400: {\"statusCode\":\"413\",\"error\":\"Payload too large\",\"message\":\"The object exceeded t"
+    },
+    {
+      "suite": "09_storage",
+      "test": "admin valid PNG upload to service-icons is ALLOWED",
+      "status": "PASS",
+      "evidence": "HTTP 200: {\"Key\":\"service-icons/audit_valid.png\",\"Id\":\"815d1720-1013-4f03-8aa2-10cc9caa824"
+    },
+    {
+      "suite": "10_grants",
+      "test": "Zero TRUNCATE/DELETE/TRIGGER/REFERENCES grants for anon/authenticated/PUBLIC",
+      "status": "PASS",
+      "evidence": "bad_grants=[]"
+    },
+    {
+      "suite": "10_grants",
+      "test": "Zero direct table grants for anon on sensitive tables",
+      "status": "PASS",
+      "evidence": "anon_sensitive_grants=[]"
+    },
+    {
+      "suite": "11_rls",
+      "test": "All public tables have RLS enabled AND forced",
+      "status": "PASS",
+      "evidence": "unforced=[]"
+    },
+    {
+      "suite": "11_rls",
+      "test": "All SECURITY DEFINER functions have safe search_path (public, pg_temp / pg_catalog)",
+      "status": "PASS",
+      "evidence": "bad_search_path=[]"
+    },
+    {
+      "suite": "12_realtime",
+      "test": "public.orders is removed from supabase_realtime publication",
+      "status": "PASS",
+      "evidence": "orders_in_realtime=[]"
+    },
+    {
+      "suite": "13_sensitive_data_exposure",
+      "test": "Zero hardcoded secrets or handshakes in source code (lib, api, admin_dashboard)",
+      "status": "PASS",
+      "evidence": "exposures=[]"
+    }
+  ]
+}
