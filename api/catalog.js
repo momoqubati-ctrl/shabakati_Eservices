@@ -23,28 +23,10 @@ export default async function handler(req, res) {
 
     const { action, product_id, cursor, limit = '50' } = req.query || {};
 
-    // إذا لم تكن مفاتيح المزود الخارجي مهيأة في متغيرات البيئة، نعتمد فوراً على قاعدة بيانات Supabase
     if (!KEY_ID || !API_SECRET) {
-      if (action === 'seller_profile' || action === 'seller_wallet') {
-        const isAdmin = await verifyAdminAuth(req, SUPABASE_ANON);
-        if (!isAdmin) {
-          return res.status(401).json({ success: false, error: 'غير مصرح بالوصول لبيانات التاجر' });
-        }
-        return res.status(200).json({
-          success: true,
-          data: action === 'seller_wallet'
-            ? { available_balance: { amount_cents: 0, currency: 'USD' } }
-            : { name: 'متجر شبكتي للخدمات الإلكترونية', email: 'admin@shabakti.com', status: 'active' }
-        });
-      }
-
-      // جلب الكتالوج من قاعدة بيانات Supabase
-      const fallbackProds = await getFallbackCachedProducts(SUPABASE_URL, SUPABASE_KEY || SUPABASE_ANON, product_id);
-      return res.status(200).json({
-        success: true,
-        data: fallbackProds
-      });
+      return res.status(500).json({ success: false, error: 'إعدادات مزود الخدمة غير مكتملة في الخادم' });
     }
+
     let endpointSubPath = '';
 
     if (action === 'seller_profile' || action === 'seller_wallet') {
