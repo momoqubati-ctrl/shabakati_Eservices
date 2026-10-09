@@ -53,6 +53,11 @@ void main() {
         ErrorSanitizer.sanitize('يرجى إدخال رقم الحساب / الهاتف'),
         'يرجى إدخال رقم الحساب / الهاتف',
       );
+
+      expect(
+        ErrorSanitizer.sanitize('Exception: هذا المستخدم تجريبي ولا يستطيع اجراء عملية شراء'),
+        'هذا المستخدم تجريبي ولا يستطيع اجراء عملية شراء',
+      );
     });
 
     test('Null or empty returns generic safe error', () {

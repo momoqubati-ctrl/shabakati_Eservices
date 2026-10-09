@@ -139,9 +139,27 @@ class CartPage extends StatelessWidget {
         displayYer: cartState.displayTotalYer(),
         itemsCount: cartState.totalCount,
         initialTelegramUser: savedTelegram,
-        initialPhone: null,
+        initialPhone: savedPhone,
         warningMessage: dynamicWarningMessage,
         onPayWithBasGate: (telegramUser, phone) async {
+          final cleanPhone = phone.replaceAll(RegExp(r'[^0-9]'), '');
+          final cleanUserAcc = currentUser.accountNumber.replaceAll(RegExp(r'[^0-9]'), '');
+
+          if (cleanPhone.endsWith('999999999') ||
+              cleanUserAcc.endsWith('999999999') ||
+              currentUser.fullName.contains('تجريبي')) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'هذا المستخدم تجريبي ولا يستطيع اجراء عملية شراء',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                backgroundColor: Colors.red,
+              ),
+            );
+            return;
+          }
+
           final ordersCubit = context.read<OrdersCubit>();
           final cartCubit = context.read<CartCubit>();
           final basGateService = BasGatePaymentService();

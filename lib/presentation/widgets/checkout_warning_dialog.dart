@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../data/models/cart_item_model.dart';
+import '../../data/models/user_account_model.dart';
+import '../../logic/auth/auth_cubit.dart';
 
 class CheckoutWarningDialog extends StatefulWidget {
   final double totalAmount;
@@ -67,6 +70,42 @@ class _CheckoutWarningDialogState extends State<CheckoutWarningDialog> {
       );
       return;
     }
+
+    // فحص وتقييد عملية الشراء للمستخدم التجريبي
+    UserAccountModel? currentUser;
+    try {
+      currentUser = context.read<AuthCubit>().currentUser;
+    } catch (_) {}
+
+    final cleanPhone = phone.replaceAll(RegExp(r'[^0-9]'), '');
+    final cleanUserAcc = (currentUser?.accountNumber ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+    final cleanInitialPhone = (widget.initialPhone ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+
+    if (cleanPhone.endsWith('999999999') ||
+        cleanUserAcc.endsWith('999999999') ||
+        cleanInitialPhone.endsWith('999999999') ||
+        currentUser?.fullName.contains('تجريبي') == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.info_outline_rounded, color: Colors.white),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'هذا المستخدم تجريبي ولا يستطيع اجراء عملية شراء',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
+
     Navigator.pop(context);
     widget.onPayWithBasGate(
       widget.initialTelegramUser ?? '',

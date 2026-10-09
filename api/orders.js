@@ -342,6 +342,19 @@ export default async function handler(req, res) {
     const { items, external_order_id, device_id, telegram_user, contact_phone, contact_email, payment_id, payment_reference, payment_method, wallet_name, user_id, account_number, notes, paid_amount_yer } = req.body || {};
     let externalId = external_order_id || `ord_${crypto.randomUUID().substring(0, 12)}`;
 
+    const isDemoAccount = (acc, phone) => {
+      const cleanAcc = String(acc || '').replace(/[^0-9]/g, '');
+      const cleanPhone = String(phone || '').replace(/[^0-9]/g, '');
+      return cleanAcc.endsWith('999999999') || cleanPhone.endsWith('999999999');
+    };
+
+    if (isDemoAccount(account_number, contact_phone)) {
+      return res.status(403).json({
+        success: false,
+        error: 'هذا المستخدم تجريبي ولا يستطيع اجراء عملية شراء'
+      });
+    }
+
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ success: false, error: 'قائمة عناصر الطلب مطلوبة' });
     }

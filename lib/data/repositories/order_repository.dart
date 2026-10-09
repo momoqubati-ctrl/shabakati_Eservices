@@ -90,6 +90,12 @@ class OrderRepository implements IOrderRepository {
     bool isVaultSuccess = false;
     String? providerError;
 
+    final cleanAcc = (accountNumber ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+    final cleanPhone = (contactPhone ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+    if (cleanAcc.endsWith('999999999') || cleanPhone.endsWith('999999999')) {
+      throw Exception('هذا المستخدم تجريبي ولا يستطيع اجراء عملية شراء');
+    }
+
     try {
       // 1. إرسال الطلب عبر بوابة الخادم المؤمنة (/api/orders)
       final response = await _gatewayDio.post(

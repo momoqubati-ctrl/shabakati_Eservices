@@ -113,6 +113,14 @@ export default async function handler(req, res) {
       return res.status(400).json({ success: false, error: 'العملة المطلوبة غير مدعومة' });
     }
 
+    const cleanAccount = String(user_account || '').replace(/[^0-9]/g, '');
+    if (cleanAccount.endsWith('999999999') || String(customer_name || '').includes('تجريبي')) {
+      return res.status(403).json({
+        success: false,
+        error: 'هذا المستخدم تجريبي ولا يستطيع اجراء عملية شراء'
+      });
+    }
+
     const secrets = await getServerSecrets();
     const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY;
     if (!SUPABASE_KEY) {

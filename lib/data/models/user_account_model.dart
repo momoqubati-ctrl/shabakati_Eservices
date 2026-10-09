@@ -25,6 +25,11 @@ class UserAccountModel {
 
   String get regionName => region == 'A' ? 'صنعاء' : (region == 'B' ? 'عدن' : region);
 
+  bool get isDemoUser {
+    final clean = accountNumber.replaceAll(RegExp(r'[^0-9]'), '');
+    return clean.endsWith('999999999') || fullName.contains('تجريبي');
+  }
+
   factory UserAccountModel.fromJson(Map<String, dynamic> json) {
     return UserAccountModel(
       id: json['id'] is int ? json['id'] : int.tryParse(json['id']?.toString() ?? ''),
