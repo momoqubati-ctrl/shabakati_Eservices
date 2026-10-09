@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 import '../../core/config/api_config.dart';
 import '../../core/network/dio_client.dart';
 import '../../core/services/secure_storage_service.dart';
+import '../../core/utils/error_sanitizer.dart';
 import '../models/cart_item_model.dart';
 import '../models/order_model.dart';
 import '../models/user_account_model.dart';
@@ -153,14 +154,14 @@ class OrderRepository implements IOrderRepository {
       }
     } on DioException catch (e) {
       if (e.response != null && e.response?.data is Map && e.response?.data['error'] != null) {
-        providerError = e.response!.data['error'].toString();
+        providerError = ErrorSanitizer.sanitize(e.response!.data['error'].toString());
       } else if (e.message != null && e.message!.isNotEmpty) {
-        providerError = e.message;
+        providerError = ErrorSanitizer.sanitize(e.message);
       } else {
-        providerError = 'تعذر الاتصال بمزود الخدمة (Digital Vault)';
+        providerError = 'تعذر الاتصال بمزود الخدمة، يرجى المحاولة لاحقاً';
       }
     } catch (e) {
-      providerError = e.toString().replaceAll('Exception: ', '');
+      providerError = ErrorSanitizer.sanitize(e);
     }
 
     // 3. إنشاء كائن الطلب دائماً وحفظه في Supabase لضمان بقاء العملية مسجلة ومعلقة حتى معالجة الدعم الفني

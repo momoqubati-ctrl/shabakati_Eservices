@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/services/auth_biometric_service.dart';
 import '../../core/services/otp_service.dart';
 import '../../core/services/secure_storage_service.dart';
+import '../../core/utils/error_sanitizer.dart';
 import '../../data/models/user_account_model.dart';
 import '../../data/repositories/auth_repository.dart';
 import 'auth_state.dart';
@@ -127,7 +128,7 @@ class AuthCubit extends Cubit<AuthState> {
         isFirstLogin: shouldPromptBiometric,
       ));
     } catch (e) {
-      emit(AuthError(e.toString().replaceAll('Exception: ', '')));
+      emit(AuthError(ErrorSanitizer.sanitize(e)));
     }
   }
 
@@ -167,7 +168,7 @@ class AuthCubit extends Cubit<AuthState> {
       await secureStorageService.saveActiveUser(user);
       emit(AuthSuccess(user: user, isFirstLogin: false));
     } catch (e) {
-      emit(AuthError(e.toString().replaceAll('Exception: ', '')));
+      emit(AuthError(ErrorSanitizer.sanitize(e)));
     }
   }
 
@@ -208,7 +209,7 @@ class AuthCubit extends Cubit<AuthState> {
       emit(AuthSuccess(user: user, isFirstLogin: false));
       return true;
     } catch (e) {
-      emit(AuthError(e.toString().replaceAll('Exception: ', '')));
+      emit(AuthError(ErrorSanitizer.sanitize(e)));
       return false;
     }
   }
@@ -336,7 +337,7 @@ class AuthCubit extends Cubit<AuthState> {
         channel: 'whatsapp',
       ));
     } catch (e) {
-      emit(AuthError(e.toString().replaceAll('Exception: ', '')));
+      emit(AuthError(ErrorSanitizer.sanitize(e)));
     }
   }
 
@@ -379,7 +380,7 @@ class AuthCubit extends Cubit<AuthState> {
         return false;
       }
     } catch (e) {
-      emit(AuthError('فشل التحقق من الرمز: ${e.toString().replaceAll('Exception: ', '')}'));
+      emit(AuthError(ErrorSanitizer.sanitize(e)));
       return false;
     }
   }

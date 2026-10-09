@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../core/utils/error_sanitizer.dart';
 import '../../../data/models/user_account_model.dart';
 import '../../../logic/auth/auth_cubit.dart';
 import '../../../logic/auth/auth_state.dart';
@@ -176,7 +177,7 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
                     children: [
                       const Icon(Icons.error_outline_rounded, color: Colors.white),
                       const SizedBox(width: 8),
-                      Expanded(child: Text(state.message)),
+                      Expanded(child: Text(ErrorSanitizer.sanitize(state.message))),
                     ],
                   ),
                   backgroundColor: Colors.red.shade700,

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/services/secure_storage_service.dart';
 import '../../core/services/whatsapp_launcher.dart';
+import '../../core/utils/error_sanitizer.dart';
 import '../../data/models/user_account_model.dart';
 import '../../logic/auth/auth_cubit.dart';
 import '../../logic/auth/auth_state.dart';
@@ -491,7 +492,7 @@ class _AccountProfilePageState extends State<AccountProfilePage> {
                             if (ctx.mounted) {
                               setDialogState(() {
                                 isSubmitting = false;
-                                errorMessage = e.toString().replaceAll('Exception: ', '');
+                                errorMessage = ErrorSanitizer.sanitize(e);
                               });
                             }
                           }

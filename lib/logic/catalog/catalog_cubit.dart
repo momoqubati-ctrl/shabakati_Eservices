@@ -1,4 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../core/utils/error_sanitizer.dart';
 import '../../data/models/product_model.dart';
 import '../../data/repositories/product_repository.dart';
 import 'catalog_state.dart';
@@ -24,7 +25,7 @@ class CatalogCubit extends Cubit<CatalogState> {
         exchangeRate: repository.currentExchangeRate,
       ));
     } catch (e) {
-      emit(CatalogError(e.toString().replaceAll('Exception: ', '')));
+      emit(CatalogError(ErrorSanitizer.sanitize(e)));
     }
   }
 

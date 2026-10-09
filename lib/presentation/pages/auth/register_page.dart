@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/constants/country_codes.dart';
+import '../../../core/utils/error_sanitizer.dart';
 import '../../../logic/auth/auth_cubit.dart';
 import '../../../logic/auth/auth_state.dart';
 import '../../widgets/phone_input_field.dart';
@@ -80,8 +81,9 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   void _showError(String message) {
+    final safeMessage = ErrorSanitizer.sanitize(message);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red.shade700),
+      SnackBar(content: Text(safeMessage), backgroundColor: Colors.red.shade700),
     );
   }
 

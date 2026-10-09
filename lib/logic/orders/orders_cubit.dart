@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/services/secure_storage_service.dart';
+import '../../core/utils/error_sanitizer.dart';
 import '../../data/models/cart_item_model.dart';
 import '../../data/models/order_model.dart';
 import '../../data/models/user_account_model.dart';
@@ -253,7 +254,7 @@ class OrdersCubit extends Cubit<OrdersState> {
       emit(successState);
       return result;
     } catch (e) {
-      final errorMsg = e.toString().replaceAll('Exception: ', '');
+      final errorMsg = ErrorSanitizer.sanitize(e);
       emit(OrderSubmitError(errorMsg));
       final fallbackOrder = OrderModel(
         externalOrderId: externalOrderId ?? 'ord_${DateTime.now().millisecondsSinceEpoch}',

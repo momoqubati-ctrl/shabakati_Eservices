@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/constants/country_codes.dart';
+import '../../../core/utils/error_sanitizer.dart';
 import '../../../data/models/user_account_model.dart';
 import '../../../logic/auth/auth_cubit.dart';
 import '../../../logic/auth/auth_state.dart';
@@ -122,8 +123,9 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _showError(String message) {
+    final safeMessage = ErrorSanitizer.sanitize(message);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red.shade700),
+      SnackBar(content: Text(safeMessage), backgroundColor: Colors.red.shade700),
     );
   }
 
@@ -599,7 +601,7 @@ class _LoginPageState extends State<LoginPage> {
                               if (ctx.mounted) {
                                 setDialogState(() {
                                   isBusy = false;
-                                  errorMessage = e.toString().replaceAll('Exception: ', '');
+                                  errorMessage = ErrorSanitizer.sanitize(e);
                                 });
                               }
                             }
@@ -637,7 +639,7 @@ class _LoginPageState extends State<LoginPage> {
                               if (ctx.mounted) {
                                 setDialogState(() {
                                   isBusy = false;
-                                  errorMessage = e.toString().replaceAll('Exception: ', '');
+                                  errorMessage = ErrorSanitizer.sanitize(e);
                                 });
                               }
                             }
@@ -673,7 +675,7 @@ class _LoginPageState extends State<LoginPage> {
                               if (ctx.mounted) {
                                 setDialogState(() {
                                   isBusy = false;
-                                  errorMessage = e.toString().replaceAll('Exception: ', '');
+                                  errorMessage = ErrorSanitizer.sanitize(e);
                                 });
                               }
                             }
