@@ -64,6 +64,44 @@ export function App() {
       ]);
 
       if (!error && data) {
+        // جلب بيانات مستخدمي التطبيق لربط أسماء وأرقام أصحاب الحسابات
+        let usersList = [];
+        try {
+          const { data: uData, error: uErr } = await supabase
+            .from('app_users')
+            .select('id, account_number, full_name, phone_national');
+          if (!uErr && Array.isArray(uData) && uData.length > 0) {
+            usersList = uData;
+          } else if (session?.access_token) {
+            const apiRes = await fetch('/api/orders?action=admin_users', {
+              headers: { Authorization: `Bearer ${session.access_token}` }
+            });
+            const apiData = await apiRes.json();
+            if (apiData?.success && Array.isArray(apiData.users)) {
+              usersList = apiData.users;
+            }
+          }
+        } catch (uEx) {
+          console.warn('Could not fetch app_users:', uEx);
+        }
+
+        const usersById = {};
+        const usersByAccount = {};
+        if (Array.isArray(usersList)) {
+          usersList.forEach((u) => {
+            if (u.id) usersById[u.id] = u;
+            if (u.account_number) {
+              usersByAccount[u.account_number] = u;
+              const cleanAcc = u.account_number.replace(/[^0-9]/g, '');
+              usersByAccount[cleanAcc] = u;
+            }
+            if (u.phone_national) {
+              const cleanNat = u.phone_national.replace(/[^0-9]/g, '');
+              usersByAccount[cleanNat] = u;
+            }
+          });
+        }
+
         const paymentsById = {};
         const paymentsByOrderId = {};
         const paymentsByRef = {};
@@ -98,6 +136,19 @@ export function App() {
                 ? 1500
                 : Math.round(((o.total_cents || 0) / 100) * (exchangeRate || 535));
 
+          const cleanOrderAcc = o.account_number ? o.account_number.replace(/[^0-9]/g, '') : null;
+          const cleanContact = o.contact_phone ? o.contact_phone.replace(/[^0-9]/g, '') : null;
+
+          const matchedUser =
+            (o.user_id && usersById[o.user_id]) ||
+            (o.account_number && usersByAccount[o.account_number]) ||
+            (cleanOrderAcc && usersByAccount[cleanOrderAcc]) ||
+            (cleanContact && usersByAccount[cleanContact]) ||
+            null;
+
+          const accountOwnerName = matchedUser?.full_name || o.customer_name || 'غير محدد';
+          const userAccountNumber = o.account_number || matchedUser?.account_number || (cleanContact ? `+967${cleanContact}` : 'غير مسجل');
+
           const knownDvBotCodes = {
             11: 'ORD-MLRX0MBV0R',
             4: 'ORD-UYAGV29QYP',
@@ -112,6 +163,8 @@ export function App() {
 
           const enriched = {
             ...o,
+            account_owner_name: accountOwnerName,
+            account_number: userAccountNumber,
             payment_id: o.payment_id || matchedPayment?.id || null,
             payment_reference:
               o.payment_reference ||

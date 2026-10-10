@@ -182,7 +182,9 @@ export const DashboardOverview = ({
             <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 font-semibold">
               <tr>
                 <th className="p-3.5">رقم الطلب</th>
-                <th className="p-3.5">حساب تيليجرام / العميل</th>
+                <th className="p-3.5">صاحب الحساب</th>
+                <th className="p-3.5">رقم الحساب</th>
+                <th className="p-3.5">تواصل / تيليجرام</th>
                 <th className="p-3.5">المبلغ (USD)</th>
                 <th className="p-3.5">المبلغ المدفوع (ر.ي)</th>
                 <th className="p-3.5">رقم مرجع الدفع</th>
@@ -209,7 +211,20 @@ export const DashboardOverview = ({
                     <td className="p-3.5 font-mono font-bold text-blue-600 dark:text-blue-400">
                       #{order.external_order_id?.replace('ord_', '')}
                     </td>
-                    <td className="p-3.5 text-slate-700 dark:text-slate-300">
+                    <td className="p-3.5 font-bold text-slate-800 dark:text-slate-100 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300 flex items-center justify-center text-[10px] font-black">
+                          {(order.account_owner_name || 'ع')[0]}
+                        </span>
+                        <span>{order.account_owner_name || 'غير محدد'}</span>
+                      </div>
+                    </td>
+                    <td className="p-3.5 font-mono font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap" dir="ltr">
+                      <span className="bg-slate-100 dark:bg-slate-700/60 px-2 py-0.5 rounded-md inline-block text-[11px]">
+                        {order.account_number || 'غير مسجل'}
+                      </span>
+                    </td>
+                    <td className="p-3.5 text-slate-700 dark:text-slate-300 whitespace-nowrap">
                       {order.telegram_user ? `@${order.telegram_user.replace('@', '')}` : (order.contact_phone || 'عميل موبايل')}
                     </td>
                     <td className="p-3.5 font-bold text-slate-900 dark:text-white">
@@ -277,7 +292,7 @@ export const DashboardOverview = ({
               })}
               {orders.length === 0 && (
                 <tr>
-                  <td colSpan="10" className="p-8 text-center text-slate-400">
+                  <td colSpan="12" className="p-8 text-center text-slate-400">
                     لا توجد طلبات مسجلة حتى الآن.
                   </td>
                 </tr>

@@ -679,6 +679,18 @@ export const OrderDetailModal = ({ order, onClose, onOrderUpdated }) => {
           <h4 className="font-bold text-slate-800 dark:text-slate-200">بيانات العميل وعملية الدفع:</h4>
           <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50 space-y-2.5">
             <div className="flex justify-between items-center">
+              <span className="text-slate-500">اسم صاحب الحساب:</span>
+              <span className="font-bold text-slate-800 dark:text-slate-100">
+                {currentOrder.account_owner_name || 'غير محدد'}
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-slate-500">رقم حساب شبكتي:</span>
+              <span className="font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2.5 py-0.5 rounded-lg text-[11px]" dir="ltr">
+                {currentOrder.account_number || 'غير مسجل'}
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
               <span className="text-slate-500">حساب تيليجرام:</span>
               {currentOrder.telegram_user ? (
                 <a

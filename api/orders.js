@@ -78,6 +78,24 @@ export default async function handler(req, res) {
     const { seller_order_id, external_order_id, action, limit = '20', user_id, account_number, phone_national } = req.query || {};
     const isAdmin = await verifyAdminAuth(req, SUPABASE_ANON);
 
+    if (action === 'admin_users') {
+      if (!isAdmin) {
+        return res.status(401).json({ success: false, error: 'غير مصرح بالوصول إلى بيانات المستخدمين' });
+      }
+      try {
+        const usersRes = await fetch(`${SUPABASE_URL}/rest/v1/app_users?select=id,account_number,full_name,phone_national`, {
+          headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`
+          }
+        });
+        const users = usersRes.ok ? await usersRes.json() : [];
+        return res.status(200).json({ success: true, users });
+      } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+      }
+    }
+
     if (action === 'user_orders') {
       if (!user_id || !account_number) {
         return res.status(400).json({ success: false, error: 'بيانات المستخدم مطلوبة' });

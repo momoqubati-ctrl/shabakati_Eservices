@@ -122,6 +122,8 @@ export const OrdersManagement = ({ orders = [], onSelectOrder }) => {
               <tr>
                 <th className="p-4">رقم الطلب</th>
                 <th className="p-4">تاريخ الطلب</th>
+                <th className="p-4">صاحب الحساب</th>
+                <th className="p-4">رقم الحساب</th>
                 <th className="p-4">العميل / التواصل</th>
                 <th className="p-4">المبلغ (USD)</th>
                 <th className="p-4">المبلغ المدفوع (ر.ي)</th>
@@ -157,7 +159,20 @@ export const OrdersManagement = ({ orders = [], onSelectOrder }) => {
                         minute: '2-digit'
                       })}
                     </td>
-                    <td className="p-4">
+                    <td className="p-4 font-bold text-slate-800 dark:text-slate-100 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300 flex items-center justify-center text-[10px] font-black">
+                          {(order.account_owner_name || 'ع')[0]}
+                        </span>
+                        <span>{order.account_owner_name || 'غير محدد'}</span>
+                      </div>
+                    </td>
+                    <td className="p-4 font-mono font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap" dir="ltr">
+                      <span className="bg-slate-100 dark:bg-slate-700/60 px-2.5 py-1 rounded-md inline-block text-[11px]">
+                        {order.account_number || 'غير مسجل'}
+                      </span>
+                    </td>
+                    <td className="p-4 whitespace-nowrap">
                       {order.telegram_user ? (
                         <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1">
                           <Send className="w-3 h-3 text-[#229ED9]" /> @{order.telegram_user.replace('@', '')}
@@ -261,7 +276,7 @@ export const OrdersManagement = ({ orders = [], onSelectOrder }) => {
               })}
               {filteredOrders.length === 0 && (
                 <tr>
-                  <td colSpan="11" className="p-12 text-center text-slate-400">
+                  <td colSpan="13" className="p-12 text-center text-slate-400">
                     لم يتم العثور على أي طلبات مطابقة للفلترة أو البحث.
                   </td>
                 </tr>
